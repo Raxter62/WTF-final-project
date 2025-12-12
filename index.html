@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FitConnect 運動平台</title>
+    <link rel="manifest" href="manifest.json">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="public/css/style.css">
+</head>
+
+<body>
+
+    <!-- 背景律動元素  -->
+    <div class="rhythm-bg">
+        <div class="honeycomb-cluster">
+            <div class="hex"></div>
+            <div class="hex"></div>
+            <div class="hex"></div>
+            <div class="hex"></div>
+            <div class="hex"></div>
+            <div class="hex"></div>
+            <div class="hex"></div>
+            <div class="hex"></div>
+            <div class="hex"></div>
+        </div>
+    </div>
+
+    <!-- 登入/註冊 -->
+    <div id="auth-view" class="auth-container">
+        <div class="auth-card">
+            <h1
+                style="text-align: center; color: var(--primary); font-style: italic; font-size: 2.5rem; margin-bottom: 2rem;">
+                FitConnect</h1>
+            <div style="display: flex; justify-content: center; gap: 10px; margin-bottom: 2rem;">
+                <button class="btn-primary" style="padding: 0.5rem 1.5rem;" onclick="switchTab('login')">登入</button>
+                <button class="btn-primary"
+                    style="padding: 0.5rem 1.5rem; background: #eee; color: #333; box-shadow: none;"
+                    onclick="switchTab('register')">註冊</button>
+            </div>
+
+            <form id="login-form">
+                <label class="form-label">Email</label>
+                <input type="email" class="form-control" name="email" required>
+                <label class="form-label">密碼</label>
+                <input type="password" class="form-control" name="password" required>
+                <button type="submit" class="btn-primary" style="width: 100%;">登入</button>
+                <p style="text-align: center; margin-top: 1rem; cursor: pointer; color: #999;" onclick="demoLogin()">
+                    Demo 模式登入</p>
+            </form>
+
+            <form id="register-form" class="hidden">
+                <label class="form-label">暱稱</label>
+                <input type="text" class="form-control" name="display_name" required>
+                <label class="form-label">Email</label>
+                <input type="email" class="form-control" name="email" required>
+                <label class="form-label">密碼</label>
+                <input type="password" class="form-control" name="password" required>
+                <button type="submit" class="btn-primary" style="width: 100%;">註冊</button>
+            </form>
+            <div id="auth-msg" style="text-align: center; margin-top: 10px; color: red;"></div>
+        </div>
+    </div>
+
+    <!-- 主控台 -->
+    <div id="dashboard-view" class="hidden">
+
+        <nav class="navbar-wrapper">
+            <div class="navbar-shape"></div>
+            <div class="navbar-content">
+                <a href="#"
+                    style="font-size: 1.5rem; font-weight: 900; color: var(--primary); text-decoration: none;">FitConnect</a>
+                <div class="nav-links">
+                    <a href="#section-hero" class="active">紀錄</a>
+                    <a href="#section-charts">分析</a>
+                    <a href="#section-leaderboard">排行榜</a>
+                    <a href="#" onclick="logout()">登出</a>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Hero: 左大頭貼 右輸入 -->
+        <section id="section-hero" class="container hero-container">
+            <!-- 左 -->
+            <div class="hero-left">
+                <div class="avatar-wrapper">
+                    <div class="avatar-arrow left" onclick="changeAvatar(-1)">❮</div>
+                    <img src="public/image/1.png" id="current-avatar" class="avatar-img" alt="Avatar">
+                    <div class="avatar-arrow right" onclick="changeAvatar(1)">❯</div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px; margin-top: 1rem;">
+                    <h2 id="user-display-name" style="margin: 0; font-size: 4rem;">User</h2>
+                    <span style="cursor: pointer; font-size: 1.5rem; color: #f1efef;"
+                        onclick="enableNameEdit()">✎</span>
+                </div>
+            </div>
+            <!-- 右 -->
+            <div class="hero-right">
+                <h2 style="margin-bottom: 2rem; color: var(--secondary);">今天動了多少？</h2>
+                <form id="add-workout-form">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div>
+                            <label class="form-label">日期</label>
+                            <input type="date" class="form-control" name="date" id="input-date" required>
+                        </div>
+                        <div>
+                            <label class="form-label">種類</label>
+                            <select class="form-control" name="type" id="input-type" onchange="calculateCalories()">
+                                <option value="跑步">跑步</option>
+                                <option value="重訓">重訓</option>
+                                <option value="腳踏車">腳踏車</option>
+                                <option value="游泳">游泳</option>
+                                <option value="瑜珈">瑜珈</option>
+                                <option value="其他">其他</option>
+                            </select>
+                        </div>
+                        <div style="grid-column: span 2;">
+                            <label class="form-label">時間 (分鐘)</label>
+                            <input type="number" class="form-control" name="minutes" id="input-minutes" min="1" required
+                                oninput="calculateCalories()">
+                        </div>
+                    </div>
+                    <div id="calorie-display-area" class="hidden"
+                        style="margin-top: 20px; text-align: right; font-size: 1.5rem; font-weight: bold; color: var(--secondary);">
+                        消耗約 <span id="calc-val" style="font-size: 2rem; color: var(--orange-red);">0</span> kcal
+                    </div>
+                    <input type="hidden" name="calories" id="input-calories">
+                    <button type="submit" class="btn-primary" style="width: 100%; margin-top: 20px;">新增紀錄</button>
+                </form>
+            </div>
+        </section>
+
+        <!-- 圖表分析 (Scrollytelling) -->
+        <section id="section-charts" style="position: relative;">
+            <div class="container">
+                <h2 style="text-align: center; margin-bottom: 2rem; font-size: 2.5rem; margin-top: 2rem;">數據分析</h2>
+
+                <!-- 全域時間切換 -->
+                <div class="global-time-switch">
+                    <button class="g-time-btn active" onclick="setGlobalRange('1d')">1天</button>
+                    <button class="g-time-btn" onclick="setGlobalRange('1wk')">1周</button>
+                    <button class="g-time-btn" onclick="setGlobalRange('1m')">1月</button>
+                    <button class="g-time-btn" onclick="setGlobalRange('3m')">3月</button>
+                </div>
+            </div>
+
+            <!-- Scroll Pinned Wrapper -->
+            <div class="scroll-pinned-wrapper">
+                <div class="chart-sticky-container">
+                    <div class="charts-grid-advanced">
+                        <!-- 每日總時間長條圖 -->
+                        <div class="chart-box">
+                            <div class="chart-title">每日運動時間</div>
+                            <div style="flex: 1;"><canvas id="chart-bar-time"></canvas></div>
+                        </div>
+                        <!-- 運動種類圓餅圖 -->
+                        <div class="chart-box">
+                            <div class="chart-title">運動種類</div>
+                            <div
+                                style="flex: 1; display: flex; align-items: center; justify-content: center; position: relative;">
+                                <canvas id="chart-pie-types"></canvas>
+                                <!-- 中間 ICON -->
+                                <div class="pie-center-content">
+                                    <span class="pie-center-icon" id="pie-center-icon">🏆</span>
+                                    <div class="pie-center-text" id="pie-center-text">總覽</div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- 每日熱量 (跨欄) -->
+                        <div class="chart-box" style="grid-column: span 2;">
+                            <div class="chart-title">熱量消耗曲線</div>
+                            <div style="flex: 1;"><canvas id="chart-line-calories"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 排行榜 -->
+        <section id="section-leaderboard" class="container" style="padding-bottom: 150px;">
+            <h2 style="text-align: center; margin-bottom: 2rem; font-size: 2.5rem;">排行榜</h2>
+            <div class="leaderboard-card">
+                <table class="leaderboard-table">
+                    <thead>
+                        <tr>
+                            <th>排名</th>
+                            <th>用戶</th>
+                            <th>消耗熱量 (kcal)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leaderboard-body">
+                        <!-- JS Render -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- Coach 半身像 -->
+    <div id="ai-coach-container" class="hidden">
+        <div class="coach-img-wrapper" onclick="toggleChat()"
+            onmouseover="document.querySelector('.coach-full-img').src='public/image/tinin2.png'"
+            onmouseout="document.querySelector('.coach-full-img').src='public/image/tinin.png'">
+            <div class="coach-bubble" id="coach-bubble">今天想練什麼呢？</div>
+            <img src="public/image/tinin.png" class="coach-full-img" alt="AI Coach">
+        </div>
+    </div>
+
+    <!-- Chat Window (Absolute) -->
+    <div id="chat-window">
+        <div class="chat-header">
+            <strong>AI 教練</strong>
+        </div>
+        <div id="chat-messages">
+            <div class="chat-msg ai">嗨！我是你的專屬教練。</div>
+        </div>
+        <div class="chat-input-area">
+            <input type="text" id="chat-input" class="form-control" placeholder="問我...">
+            <button onclick="sendChatMessage()">➤</button>
+        </div>
+    </div>
+
+
+
+    <!-- Scripts -->
+    <script src="public/js/main.js"></script>
+    <script src="public/js/ai_chat.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) navigator.serviceWorker.register('serviceWorker.js');
+    </script>
+</body>
+
+</html>
