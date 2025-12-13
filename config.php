@@ -15,13 +15,20 @@ if ($databaseUrl) {
     $user = $dbConfig['user'] ?? '';
     $pass = $dbConfig['pass'] ?? '';
     $path = ltrim($dbConfig['path'] ?? '', '/'); // 移除開頭的斜線
+    $query  = $dbConfig['query'] ?? '';
+            
+    // 把 query 轉成 ;key=value 形式，丟進 DSN
+    $extraDsn = '';
+    if ($query) {
+        // sslmode=require&application_name=xxx => ;sslmode=require;application_name=xxx
+        $extraDsn = ';' . str_replace('&', ';', $query);
+    }
 
     try {
-        $dsn = '';
         if (strpos($scheme, 'postgres') !== false) {
             // PostgreSQL
             $port = $port ?: 5432;
-            $dsn = "pgsql:host=$host;port=$port;dbname=$path";
+            $dsn = "pgsql:host=$host;port=$port;dbname=$path{$extraDsn}";
         } else {
             // MySQL
             $port = $port ?: 3306;

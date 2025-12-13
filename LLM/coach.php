@@ -38,7 +38,6 @@ function askCoach($historyText, $userMessage) {
         return "連線錯誤：" . curl_error($ch);
     }
     
-    curl_close($ch);
 
     $json = json_decode($response, true);
     

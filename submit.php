@@ -103,27 +103,44 @@ if ($action === 'get_user_info') {
     }
 
 } elseif ($action === 'get_stats') {
-    // 1. 最近 7 天的每日分鐘數
-    $stmt = $pdo->prepare("SELECT date, SUM(minutes) as total FROM workouts WHERE user_id = ? AND date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) GROUP BY date ORDER BY date ASC");
-    $stmt->execute([$userId]);
+    // 1. 最近 7 天的每日分鐘數（使用 Postgres 語法）
+    $sql = "
+        SELECT date, SUM(minutes) AS total
+        FROM workouts
+        WHERE user_id = :uid
+          AND date >= CURRENT_DATE - INTERVAL '7 days'
+        GROUP BY date
+        ORDER BY date ASC
+    ";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([':uid' => $userId]);
     $daily = $stmt->fetchAll();
 
     // 2. 運動類型分佈
-    $stmt = $pdo->prepare("SELECT type, SUM(minutes) as total FROM workouts WHERE user_id = ? GROUP BY type");
-    $stmt->execute([$userId]);
+    $sql = "
+        SELECT type, SUM(minutes) AS total
+        FROM workouts
+        WHERE user_id = :uid
+        GROUP BY type
+    ";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([':uid' => $userId]);
     $types = $stmt->fetchAll();
 
     sendResponse(['success' => true, 'daily' => $daily, 'types' => $types]);
 
 } elseif ($action === 'get_leaderboard') {
-    // 取出最近 30 天運動總分鐘數的前 10 名
-    $sql = "SELECT u.display_name, SUM(w.minutes) as total 
-            FROM workouts w 
-            JOIN users u ON w.user_id = u.id 
-            WHERE w.date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) 
-            GROUP BY u.id 
-            ORDER BY total DESC 
-            LIMIT 10";
+    // 取出最近 30 天運動總分鐘數的前 10 名（Postgres 語法）
+    $sql = "
+        SELECT u.display_name,
+               SUM(w.minutes) AS total
+        FROM workouts w
+        JOIN users u ON w.user_id = u.id
+        WHERE w.date >= CURRENT_DATE - INTERVAL '30 days'
+        GROUP BY u.id, u.display_name
+        ORDER BY total DESC
+        LIMIT 10
+    ";
     $stmt = $pdo->query($sql);
     $data = $stmt->fetchAll();
     
@@ -136,10 +153,19 @@ if ($action === 'get_user_info') {
 
 } elseif ($action === 'generate_bind_code') {
     $code = str_pad(mt_rand(100000, 999999), 6, '0', STR_PAD_LEFT);
-    // 10 分鐘內有效
-    $sql = "UPDATE users SET line_bind_code = ?, line_bind_code_expires_at = DATE_ADD(NOW(), INTERVAL 10 MINUTE) WHERE id = ?";
+
+    // 10 分鐘內有效（Postgres 語法）
+    $sql = "
+        UPDATE users
+        SET line_bind_code = :code,
+            line_bind_code_expires_at = NOW() + INTERVAL '10 minutes'
+        WHERE id = :id
+    ";
     $stmt = $pdo->prepare($sql);
-    $stmt->execute([$code, $userId]);
+    $stmt->execute([
+        ':code' => $code,
+        ':id'   => $userId,
+    ]);
 
     sendResponse(['success' => true, 'code' => $code]);
 

@@ -6,7 +6,9 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-install pdo pdo_mysql pdo_pgsql
 
 # 啟用 Apache mod_rewrite
-RUN a2enmod rewrite
+# 解決 MPM 衝突並啟用 mod_rewrite
+RUN a2dismod mpm_event mpm_worker || true \
+    && a2enmod mpm_prefork rewrite
 
 # 複製專案檔案到容器
 COPY . /var/www/html/
