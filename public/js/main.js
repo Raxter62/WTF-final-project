@@ -18,9 +18,20 @@ document.addEventListener('DOMContentLoaded', () => {
     generateAvatarGrid();
     setupCoachInteraction();
 
-    // 預設日期
-    const dateInput = document.getElementById('input-date');
-    if (dateInput) dateInput.valueAsDate = new Date();
+    // 預設日期與時間
+    const datePart = document.getElementById('input-date-part');
+    const timePart = document.getElementById('input-time-part');
+    if (datePart && timePart) {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+
+        datePart.value = `${year}-${month}-${day}`;
+        timePart.value = `${hours}:${minutes}`;
+    }
 });
 
 // --- Auth ---
@@ -104,12 +115,37 @@ async function handleRegister(e) { e.preventDefault(); demoLogin(); }
 
 async function handleAddWorkout(e) {
     e.preventDefault();
+    const datePart = document.getElementById('input-date-part').value;
+    const timePart = document.getElementById('input-time-part').value;
+    const fullDate = `${datePart} ${timePart}:00`; // YYYY-MM-DD HH:mm:ss
+
+    const type = document.getElementById('input-type').value;
+    const minutes = document.getElementById('input-minutes').value;
+    const calories = document.getElementById('input-calories').value;
+
+    const payload = {
+        date: fullDate,
+        type, minutes, calories
+    };
+
     if (isDemoMode) {
         alert('Demo: 新增成功');
-        loadAllCharts(); // 重新整理
+        // loadAllCharts(); 
         return;
     }
-    // Real logic...
+
+    const res = await fetch(`${API_URL}?action=add_workout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+    const json = await res.json();
+    if (json.success) {
+        alert('新增成功');
+        location.reload();
+    } else {
+        alert('失敗: ' + json.message);
+    }
 }
 
 function calculateCalories() {

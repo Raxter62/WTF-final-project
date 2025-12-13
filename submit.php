@@ -89,7 +89,7 @@ if ($action === 'get_user_info') {
     sendResponse(['success' => true, 'data' => $data]);
 
 } elseif ($action === 'add_workout') {
-    $date = $input['date'] ?? date('Y-m-d');
+    $date = $input['date'] ?? date('Y-m-d H:i:s');
     $type = $input['type'] ?? 'General';
     $minutes = (int) ($input['minutes'] ?? 0);
     $calories = (int) ($input['calories'] ?? 0);

@@ -106,8 +106,13 @@
                 <form id="add-workout-form">
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                         <div>
-                            <label class="form-label">日期</label>
-                            <input type="date" class="form-control" name="date" id="input-date" required>
+                            <label class="form-label">日期&時間</label>
+                            <div style="display: flex; gap: 10px;">
+                                <input type="date" class="form-control" name="date_part" id="input-date-part" required
+                                    style="flex: 2;">
+                                <input type="time" class="form-control" name="time_part" id="input-time-part" required
+                                    style="flex: 1;">
+                            </div>
                         </div>
                         <div>
                             <label class="form-label">種類</label>
