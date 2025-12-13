@@ -14,6 +14,7 @@
 
     <!-- 背景律動元素  -->
     <div class="rhythm-bg">
+        <canvas id="particle-canvas"></canvas>
         <div class="honeycomb-cluster">
             <div class="hex"></div>
             <div class="hex"></div>
@@ -131,8 +132,25 @@
             </div>
         </section>
 
-        <!-- 圖表分析 (Scrollytelling) -->
-        <section id="section-charts" style="position: relative;">
+        <!-- Wave Divider -->
+        <div class="wave-divider">
+            <svg class="waves" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+                viewBox="0 24 150 28" preserveAspectRatio="none" shape-rendering="auto">
+                <defs>
+                    <path id="gentle-wave"
+                        d="M-160 44c30 0 58-18 88-18s 58 18 88 18 58-18 88-18 58 18 88 18 v44h-352z" />
+                </defs>
+                <g class="parallax">
+                    <use xlink:href="#gentle-wave" x="48" y="0" />
+                    <use xlink:href="#gentle-wave" x="48" y="3" />
+                    <use xlink:href="#gentle-wave" x="48" y="5" />
+                    <use xlink:href="#gentle-wave" x="48" y="7" />
+                </g>
+            </svg>
+        </div>
+
+        <!-- 圖表分析 -->
+        <section id="section-charts">
             <div class="container">
                 <h2 style="text-align: center; margin-bottom: 2rem; font-size: 2.5rem; margin-top: 2rem;">數據分析</h2>
 
@@ -177,8 +195,25 @@
             </div>
         </section>
 
+        <!-- Wave Divider (Yellow) -->
+        <div class="wave-divider yellow-waves">
+            <svg class="waves" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+                viewBox="0 24 150 28" preserveAspectRatio="none" shape-rendering="auto">
+                <defs>
+                    <path id="gentle-wave2"
+                        d="M-160 44c30 0 58-18 88-18s 58 18 88 18 58-18 88-18 58 18 88 18 v44h-352z" />
+                </defs>
+                <g class="parallax">
+                    <use xlink:href="#gentle-wave2" x="48" y="0" />
+                    <use xlink:href="#gentle-wave2" x="48" y="3" />
+                    <use xlink:href="#gentle-wave2" x="48" y="5" />
+                    <use xlink:href="#gentle-wave2" x="48" y="7" />
+                </g>
+            </svg>
+        </div>
+
         <!-- 排行榜 -->
-        <section id="section-leaderboard" class="container" style="padding-bottom: 150px;">
+        <section id="section-leaderboard" class="container">
             <h2 style="text-align: center; margin-bottom: 2rem; font-size: 2.5rem;">排行榜</h2>
             <div class="leaderboard-card">
                 <table class="leaderboard-table">
@@ -226,6 +261,7 @@
 
     <!-- Scripts -->
     <script src="public/js/main.js"></script>
+    <script src="public/js/bg-effects.js"></script>
     <script src="public/js/ai_chat.js"></script>
     <script>
         if ('serviceWorker' in navigator) navigator.serviceWorker.register('serviceWorker.js');
