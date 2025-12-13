@@ -396,38 +396,46 @@ function saveNewName(newName) {
 }
 
 // --- Leaderboard ---
-function renderLeaderboard() {
+async function renderLeaderboard() {
     const tbody = document.getElementById('leaderboard-body');
     if (!tbody) return;
 
-    // Mock Data
-    const users = [
-        { name: 'FitMaster', val: 3200 },
-        { name: currentUser ? currentUser.display_name : 'User', val: 2800 },
-        { name: 'Runner123', val: 2100 },
-        { name: 'YogaQueen', val: 1800 },
-        { name: 'GymBro', val: 1500 }
-    ];
+    try {
+        const res = await fetch(`${API_URL}?action=get_leaderboard`);
+        const json = await res.json();
 
-    // Sort
-    users.sort((a, b) => b.val - a.val);
-
-    tbody.innerHTML = '';
-    users.forEach((u, i) => {
-        const tr = document.createElement('tr');
-        // Adds crown for top 3
-        const rank = i < 3 ? ['🥇', '🥈', '🥉'][i] : (i + 1);
-        tr.innerHTML = `
-            <td><span style="font-size: 1.2rem;">${rank}</span></td>
-            <td><strong>${u.name}</strong></td>
-            <td>${u.val}</td>
-        `;
-        // Highlight current user
-        if (currentUser && u.name === currentUser.display_name) {
-            tr.style.background = 'rgba(255, 71, 87, 0.1)';
+        if (!json.success || !json.data) {
+            tbody.innerHTML = '<tr><td colspan="3">暫無資料</td></tr>';
+            return;
         }
-        tbody.appendChild(tr);
-    });
+
+        const users = json.data;
+        tbody.innerHTML = '';
+
+        users.forEach((u, i) => {
+            const tr = document.createElement('tr');
+            // Adds crown for top 3
+            const rank = i < 3 ? ['🥇', '🥈', '🥉'][i] : (i + 1);
+
+            // display_name might be null, fallback
+            const name = u.display_name || 'User';
+
+            tr.innerHTML = `
+                <td><span style="font-size: 1.2rem;">${rank}</span></td>
+                <td><strong>${name}</strong></td>
+                <td>${u.total}</td>
+            `;
+            // Highlight current user
+            if (currentUser && name === currentUser.display_name) {
+                tr.style.background = 'rgba(255, 71, 87, 0.1)';
+            }
+            tbody.appendChild(tr);
+        });
+
+    } catch (e) {
+        console.error('Leaderboard error:', e);
+        tbody.innerHTML = '<tr><td colspan="3">載入失敗</td></tr>';
+    }
 }
 
 async function fetchPost(a, d) { return { success: true }; } // Mock for demo
