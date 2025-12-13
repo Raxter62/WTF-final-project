@@ -1,5 +1,5 @@
 /* public/css/style.css - REFINED & RESTORED */
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;700;900&family=Noto+Serif+TC:wght@600;900&display=swap');
 
 :root {
     --primary: #ffa502;
@@ -14,10 +14,10 @@
     --bg-body: #ffffff;
     --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.05);
 
-    /* Warm Gradient Colors */
-    --warm-1: #fad0c4;
-    --warm-2: #ffd1ff;
-    --warm-3: #ff9a9e;
+    /* Warm Gradient Colors - Orange/White Theme (No Pink/Red) */
+    --warm-1: #ffffff;
+    --warm-2: #fff7e6;
+    --warm-3: #ffcc80;
 }
 
 /* Reset & Scaffolding */
@@ -28,13 +28,22 @@
     font-family: 'Outfit', sans-serif;
 }
 
+/* Specific Font for Headers */
+h1,
+h2,
+.navbar-content>a,
+.nav-logo-text {
+    font-family: 'Noto Serif TC', serif;
+    /* Premium font */
+}
+
 html {
     scroll-behavior: smooth;
 }
 
 /* Warm Animated Background */
 body {
-    background: linear-gradient(-45deg, #fad0c4, #ffd1ff, #ff9a9e, #fbc2eb);
+    background: linear-gradient(-45deg, var(--warm-1), var(--warm-2), var(--warm-3), var(--warm-2));
     background-size: 400% 400%;
     animation: gradientBG 15s ease infinite;
     color: var(--text-dark);
@@ -63,7 +72,8 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    z-index: -1;
+    z-index: -5;
+    /* Push way back */
     pointer-events: none;
     overflow: hidden;
 }
@@ -173,7 +183,7 @@ body {
     display: flex;
     align-items: center;
     padding: 0 5%;
-    background: rgba(255, 255, 255, 0.8);
+    background: rgba(255, 255, 255, 0.9);
     backdrop-filter: blur(8px);
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
 }
@@ -187,11 +197,22 @@ body {
     align-items: center;
 }
 
-.navbar-content>a {
-    font-size: 1.5rem;
+.nav-logo-area {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    text-decoration: none;
+}
+
+.nav-logo-img {
+    height: 50px;
+    width: auto;
+}
+
+.nav-logo-text {
+    font-size: 1.8rem;
     font-weight: 900;
     color: var(--secondary);
-    text-decoration: none;
 }
 
 .nav-links a {
@@ -616,20 +637,26 @@ body {
 .wave-divider {
     position: relative;
     width: 100%;
-    height: 100px;
-    /* Adjusted height for compactness */
-    margin-bottom: -1px;
-    /* Remove gap */
+    /* Let height be determined by children or fixed if using simple block */
+    height: 120px;
+    margin: 0;
+    padding: 0;
     overflow: hidden;
     line-height: 0;
+    z-index: 12;
+    /* Higher than Section (10) to mask the straight edge */
+    pointer-events: none;
 }
 
 .waves {
     position: relative;
+    display: block;
+    /* CRITICAL: Removes inline bottom gap */
     width: 100%;
     height: 100%;
-    min-height: 80px;
-    max-height: 120px;
+    /* ensure it fills the container */
+    margin: 0;
+    padding: 0;
 }
 
 /* Base Wave Animation (Parallax) */
@@ -696,21 +723,43 @@ body {
 /* Matches Leaderboard BG */
 
 /* --- Sections Refined --- */
+/* --- Sections Refined --- */
 #section-charts {
     width: 100%;
-    padding: 20px 20px 50px;
+    /* Top padding 0, huge bottom padding for overlap */
+    padding: 50px 20px 200px;
+    /* Add top padding back to compensate for overlap */
     background: rgba(255, 255, 255, 0.85);
-    /* Matched to wave */
     backdrop-filter: blur(10px);
-    margin-top: 0;
+
+    /* Pull UP into the wave above significantly (-50px) */
+    margin-top: -50px;
+
+    position: relative;
+    z-index: 10;
+}
+
+/* The yellow wave container that needs to overlap the charts section */
+.wave-divider.yellow-waves {
+    height: 160px;
+    /* Taller wave for better overlap effect */
+
+    /* Pull UP over the chart section */
+    margin-top: -160px;
+
+    position: relative;
+    z-index: 20;
+    /* Higher than charts (10) */
 }
 
 #section-leaderboard {
     width: 100%;
-    padding: 50px 20px 100px;
+    padding: 0 20px 100px;
     background: #fffde7;
-    /* Yellowish for Leaderboard */
+
+    /* Pull UP into the yellow wave above significantly */
+    margin-top: -5px;
+
     position: relative;
-    margin-top: -1px;
-    /* Ensure connection */
+    z-index: 20;
 }
