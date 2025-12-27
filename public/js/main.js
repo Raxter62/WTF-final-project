@@ -16,8 +16,8 @@ document.addEventListener('DOMContentLoaded', () => {
     setupForms();
 
     // Default date/time
-    const datePart = document.getElementById('input-date');
-    const timePart = document.getElementById('input-time');
+    const datePart = document.getElementById('input-date-part');
+    const timePart = document.getElementById('input-time-part');
     if (datePart && timePart) {
         const now = new Date();
         const year = now.getFullYear();
@@ -50,13 +50,13 @@ async function checkLogin() {
 }
 
 function showLogin() {
-    document.getElementById('auth-container').style.display = 'block';
-    document.getElementById('dashboard-container').style.display = 'none';
+    document.getElementById('auth-view').classList.remove('hidden');
+    document.getElementById('dashboard-view').classList.add('hidden');
 }
 
 function showDashboard() {
-    document.getElementById('auth-container').style.display = 'none';
-    document.getElementById('dashboard-container').style.display = 'block';
+    document.getElementById('auth-view').classList.add('hidden');
+    document.getElementById('dashboard-view').classList.remove('hidden');
 
     updateProfileUI();
     loadAllCharts();
@@ -90,11 +90,9 @@ async function handleRegister(e) {
     const display_name = (fd.get('display_name') || '').toString().trim();
     const email = (fd.get('email') || '').toString().trim();
     const password = (fd.get('password') || '').toString();
-    const password2 = (fd.get('password2') || '').toString();
 
     if (!display_name) { alert('請輸入暱稱'); return; }
     if (!email || !password) { alert('請輸入 Email 和密碼'); return; }
-    if (password !== password2) { alert('兩次密碼輸入不一致'); return; }
 
     const res = await fetchPost('register', { display_name, email, password });
     if (res.success) {
@@ -231,8 +229,8 @@ async function saveProfile() {
 async function handleAddWorkout(e) {
     e.preventDefault();
 
-    const datePart = document.getElementById('input-date').value;
-    const timePart = document.getElementById('input-time').value;
+    const datePart = document.getElementById('input-date-part').value;
+    const timePart = document.getElementById('input-time-part').value;
     const type = document.getElementById('input-type').value;
     const minutes = parseInt(document.getElementById('input-minutes').value || '0', 10);
     const calories = parseInt(document.getElementById('input-calories').value || '0', 10);
@@ -262,7 +260,8 @@ async function handleAddWorkout(e) {
     const json = await res.json();
     if (json.success) {
         alert('新增成功');
-        location.reload();
+        await loadAllCharts();
+        await renderLeaderboard();
     } else {
         alert('失敗: ' + json.message);
     }
