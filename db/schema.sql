@@ -29,30 +29,7 @@ CREATE TABLE IF NOT EXISTS workouts (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS user_totals (
-    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    total_calories BIGINT NOT NULL DEFAULT 0
-);
-
-CREATE TABLE IF NOT EXISTS leaderboard_snapshots (
-    id BIGSERIAL PRIMARY KEY,
-    date DATE NOT NULL,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    rank INTEGER NOT NULL,
-    total_minutes INTEGER NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS email_notifications (
-    id BIGSERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    type VARCHAR(50) NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    sent_at TIMESTAMPTZ DEFAULT NULL
-);
-
 CREATE INDEX IF NOT EXISTS idx_workouts_user_date ON workouts(user_id, date);
-CREATE INDEX IF NOT EXISTS idx_leaderboard_date ON leaderboard_snapshots(date);
 
 /* =========================================================
    MySQL 版本（XAMPP / phpMyAdmin 常用）
@@ -85,33 +62,4 @@ CREATE TABLE IF NOT EXISTS workouts (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_workouts_user_date (user_id, date)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 累積總卡路里 (User Totals)
-CREATE TABLE IF NOT EXISTS user_totals (
-    user_id INT PRIMARY KEY,
-    total_calories BIGINT NOT NULL DEFAULT 0,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 排行榜快照（保留）
-CREATE TABLE IF NOT EXISTS leaderboard_snapshots (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    date DATE NOT NULL,
-    user_id INT NOT NULL,
-    rank INT NOT NULL,
-    total_minutes INT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    INDEX idx_leaderboard_date (date)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- Email 通知佇列/紀錄（保留）
-CREATE TABLE IF NOT EXISTS email_notifications (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
-    type VARCHAR(50) NOT NULL, -- 'achievement', 'overtaken'
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    sent_at DATETIME DEFAULT NULL,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
