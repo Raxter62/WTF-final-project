@@ -46,257 +46,6 @@ function normalizeRange(?string $range): string {
     return in_array($range, ['1d', '1wk', '1m', '3m'], true) ? $range : '1d';
 }
 
-function buildLeaderboard(PDO $pdo, string $driver): array {
-    if ($driver === 'pgsql') {
-        $sql = "
-            SELECT
-                u.display_name,
-                SUM(w.minutes) AS total
-            FROM workouts w
-            JOIN users u ON w.user_id = u.id
-            WHERE w.date >= (CURRENT_DATE - INTERVAL '30 days')
-            GROUP BY u.id, u.display_name
-            ORDER BY total DESC
-            LIMIT 10
-        ";
-    } else {
-        $sql = "
-            SELECT
-                u.display_name,
-                SUM(w.minutes) AS total
-            FROM workouts w
-            JOIN users u ON w.user_id = u.id
-            WHERE w.date >= (CURDATE() - INTERVAL 30 DAY)
-            GROUP BY u.id, u.display_name
-            ORDER BY total DESC
-            LIMIT 10
-        ";
-    }
-
-    $stmt = $pdo->query($sql);
-    $rows = $stmt->fetchAll();
-
-    foreach ($rows as $i => &$row) {
-        $row['rank'] = $i + 1;
-        $row['total'] = (int)$row['total'];
-    }
-
-    return $rows;
-}
-
-function buildDashboardData(PDO $pdo, int $userId, string $driver, string $range): array {
-    $range = normalizeRange($range);
-
-    if ($driver === 'pgsql') {
-        if ($range === '1d') {
-            $sqlBarLine = "
-                WITH bins AS (
-                    SELECT generate_series(0, 7) AS b
-                )
-                SELECT
-                    b.b AS bin,
-                    COALESCE(SUM(w.minutes),0) AS total_minutes,
-                    COALESCE(SUM(w.calories),0) AS total_calories
-                FROM bins b
-                LEFT JOIN workouts w
-                    ON w.user_id = :uid
-                   AND w.date >= (NOW() - INTERVAL '24 hours')
-                   AND floor(extract(hour from w.date)::numeric / 3)::int = b.b
-                GROUP BY b.b
-                ORDER BY b.b ASC
-            ";
-            $stmt = $pdo->prepare($sqlBarLine);
-            $stmt->execute([':uid' => $userId]);
-            $rows = $stmt->fetchAll();
-
-            $labels = [];
-            $bar = [];
-            $line = [];
-            for ($i=0; $i<8; $i++) {
-                $h = $i * 3;
-                $labels[] = sprintf('%02d:00', $h);
-            }
-            foreach ($rows as $r) {
-                $bar[]  = (int)$r['total_minutes'];
-                $line[] = (int)$r['total_calories'];
-            }
-        } else {
-            $days = ($range === '1wk') ? 7 : (($range === '1m') ? 30 : 90);
-
-            $sqlBarLine = "
-                SELECT
-                    (date AT TIME ZONE 'UTC')::date AS d,
-                    COALESCE(SUM(minutes),0) AS total_minutes,
-                    COALESCE(SUM(calories),0) AS total_calories
-                FROM workouts
-                WHERE user_id = :uid
-                  AND date >= (CURRENT_DATE - INTERVAL '{$days} days')
-                GROUP BY (date AT TIME ZONE 'UTC')::date
-                ORDER BY d ASC
-            ";
-            $stmt = $pdo->prepare($sqlBarLine);
-            $stmt->execute([':uid' => $userId]);
-            $rows = $stmt->fetchAll();
-
-            // 產生連續日期 label（補 0）
-            $labels = [];
-            $bar = [];
-            $line = [];
-
-            $mapMin = [];
-            $mapCal = [];
-            foreach ($rows as $r) {
-                $key = (string)$r['d'];
-                $mapMin[$key] = (int)$r['total_minutes'];
-                $mapCal[$key] = (int)$r['total_calories'];
-            }
-
-            $start = new DateTimeImmutable('today');
-            $start = $start->sub(new DateInterval('P' . ($days-1) . 'D'));
-            for ($i=0; $i<$days; $i++) {
-                $d = $start->add(new DateInterval('P' . $i . 'D'))->format('m/d');
-                $key = $start->add(new DateInterval('P' . $i . 'D'))->format('Y-m-d');
-                $labels[] = $d;
-                $bar[] = $mapMin[$key] ?? 0;
-                $line[] = $mapCal[$key] ?? 0;
-            }
-        }
-
-        // Pie：區間內各類型 calories
-        if ($range === '1d') {
-            $where = "date >= (NOW() - INTERVAL '24 hours')";
-        } else {
-            $days = ($range === '1wk') ? 7 : (($range === '1m') ? 30 : 90);
-            $where = "date >= (CURRENT_DATE - INTERVAL '{$days} days')";
-        }
-
-        $sqlPie = "
-            SELECT type, COALESCE(SUM(calories),0) AS total_calories
-            FROM workouts
-            WHERE user_id = :uid
-              AND {$where}
-            GROUP BY type
-        ";
-        $stmt = $pdo->prepare($sqlPie);
-        $stmt->execute([':uid' => $userId]);
-        $pieRows = $stmt->fetchAll();
-
-    } else {
-        // MySQL
-        if ($range === '1d') {
-            $sqlBarLine = "
-                SELECT
-                    FLOOR(HOUR(date) / 3) AS bin,
-                    COALESCE(SUM(minutes),0) AS total_minutes,
-                    COALESCE(SUM(calories),0) AS total_calories
-                FROM workouts
-                WHERE user_id = :uid
-                  AND date >= (NOW() - INTERVAL 24 HOUR)
-                GROUP BY FLOOR(HOUR(date) / 3)
-                ORDER BY bin ASC
-            ";
-            $stmt = $pdo->prepare($sqlBarLine);
-            $stmt->execute([':uid' => $userId]);
-            $rows = $stmt->fetchAll();
-
-            $labels = [];
-            $bar = array_fill(0, 8, 0);
-            $line = array_fill(0, 8, 0);
-
-            for ($i=0; $i<8; $i++) {
-                $h = $i * 3;
-                $labels[] = sprintf('%02d:00', $h);
-            }
-            foreach ($rows as $r) {
-                $b = (int)$r['bin'];
-                if ($b >=0 && $b <=7) {
-                    $bar[$b] = (int)$r['total_minutes'];
-                    $line[$b] = (int)$r['total_calories'];
-                }
-            }
-        } else {
-            $days = ($range === '1wk') ? 7 : (($range === '1m') ? 30 : 90);
-
-            $sqlBarLine = "
-                SELECT
-                    DATE(date) AS d,
-                    COALESCE(SUM(minutes),0) AS total_minutes,
-                    COALESCE(SUM(calories),0) AS total_calories
-                FROM workouts
-                WHERE user_id = :uid
-                  AND date >= (CURDATE() - INTERVAL {$days} DAY)
-                GROUP BY DATE(date)
-                ORDER BY d ASC
-            ";
-            $stmt = $pdo->prepare($sqlBarLine);
-            $stmt->execute([':uid' => $userId]);
-            $rows = $stmt->fetchAll();
-
-            $labels = [];
-            $bar = [];
-            $line = [];
-
-            $mapMin = [];
-            $mapCal = [];
-            foreach ($rows as $r) {
-                $key = (string)$r['d'];
-                $mapMin[$key] = (int)$r['total_minutes'];
-                $mapCal[$key] = (int)$r['total_calories'];
-            }
-
-            $start = new DateTimeImmutable('today');
-            $start = $start->sub(new DateInterval('P' . ($days-1) . 'D'));
-            for ($i=0; $i<$days; $i++) {
-                $dt = $start->add(new DateInterval('P' . $i . 'D'));
-                $labels[] = $dt->format('m/d');
-                $key = $dt->format('Y-m-d');
-                $bar[] = $mapMin[$key] ?? 0;
-                $line[] = $mapCal[$key] ?? 0;
-            }
-        }
-
-        // Pie
-        $where = ($range === '1d') ? "date >= (NOW() - INTERVAL 24 HOUR)"
-                                   : "date >= (CURDATE() - INTERVAL " . (($range === '1wk') ? 7 : (($range === '1m') ? 30 : 90)) . " DAY)";
-
-        $sqlPie = "
-            SELECT type, COALESCE(SUM(calories),0) AS total_calories
-            FROM workouts
-            WHERE user_id = :uid
-              AND {$where}
-            GROUP BY type
-        ";
-        $stmt = $pdo->prepare($sqlPie);
-        $stmt->execute([':uid' => $userId]);
-        $pieRows = $stmt->fetchAll();
-    }
-
-    // 讓 pie 的 label 順序固定，對應前端圖示/色彩
-    $fixedLabels = ['跑步', '重訓', '腳踏車', '游泳', '瑜珈', '其他'];
-    $pieMap = [];
-    foreach ($pieRows as $r) {
-        $t = (string)$r['type'];
-        $pieMap[$t] = (int)$r['total_calories'];
-    }
-    $pieData = [];
-    foreach ($fixedLabels as $lab) {
-        $pieData[] = $pieMap[$lab] ?? 0;
-    }
-
-    return [
-        'bar' => ['labels' => $labels, 'data' => $bar],
-        'line' => ['labels' => $labels, 'data' => $line],
-        'pie' => ['labels' => $fixedLabels, 'data' => $pieData],
-    ];
-}
-
-function requireLogin(): int {
-    if (!isset($_SESSION['user_id'])) {
-        sendResponse(['success' => false, 'message' => '尚未登入']);
-    }
-    return (int)$_SESSION['user_id'];
-}
-
 // 讀取輸入
 $input  = getJsonInput();
 $action = $input['action'] ?? ($_GET['action'] ?? null);
@@ -443,25 +192,13 @@ if ($action === 'get_user_info') {
     sendResponse(['success' => true]);
 
 } elseif ($action === 'add_workout') {
-    global $pdo, $DB_DRIVER;
+    global $pdo;
 
     // 新增一筆運動紀錄
-    $dateRaw  = (string)($input['date'] ?? '');
+    $date     = (string)($input['date'] ?? date('Y-m-d H:i:s'));
     $type     = trim((string)($input['type'] ?? '其他'));
     $minutes  = (int)($input['minutes'] ?? 0);
     $calories = (int)($input['calories'] ?? 0);
-    $range    = normalizeRange((string)($input['range'] ?? '1d'));
-
-    if ($dateRaw === '') {
-        sendResponse(['success' => false, 'message' => '缺少運動日期']);
-    }
-
-    try {
-        $dateObj = new DateTimeImmutable($dateRaw);
-        $date = $dateObj->format('Y-m-d H:i:sP');
-    } catch (Exception $e) {
-        sendResponse(['success' => false, 'message' => '日期格式錯誤']);
-    }
 
     if ($minutes < 0) $minutes = 0;
     if ($calories < 0) $calories = 0;
@@ -479,23 +216,14 @@ if ($action === 'get_user_info') {
         ':minutes'  => $minutes,
         ':calories' => $calories,
     ])) {
-        // 更新 user_totals 方便排行榜/分析快取
+        // 更新累積總消耗卡路里 (user_totals)
         try {
-            if ($DB_DRIVER === 'pgsql') {
-                $stmtTotals = $pdo->prepare("
-                    INSERT INTO user_totals (user_id, total_calories)
-                    VALUES (:uid, :calories)
-                    ON CONFLICT (user_id)
-                    DO UPDATE SET total_calories = user_totals.total_calories + EXCLUDED.total_calories
-                ");
-            } else {
-                $stmtTotals = $pdo->prepare("
-                    INSERT INTO user_totals (user_id, total_calories)
-                    VALUES (:uid, :calories)
-                    ON DUPLICATE KEY UPDATE total_calories = total_calories + VALUES(total_calories)
-                ");
-            }
-
+            $stmtTotals = $pdo->prepare("
+                INSERT INTO user_totals (user_id, total_calories)
+                VALUES (:uid, :calories)
+                ON CONFLICT (user_id)
+                DO UPDATE SET total_calories = user_totals.total_calories + EXCLUDED.total_calories
+            ");
             $stmtTotals->execute([
                 ':uid'      => $userId,
                 ':calories' => $calories,
@@ -504,19 +232,237 @@ if ($action === 'get_user_info') {
             // totals 更新失敗不影響主流程
         }
 
-        $dashboard = buildDashboardData($pdo, $userId, $DB_DRIVER, $range);
-        $leaderboard = buildLeaderboard($pdo, $DB_DRIVER);
-
-        sendResponse([
-            'success' => true,
-            'data' => [
-                'dashboard' => $dashboard,
-                'leaderboard' => $leaderboard,
-            ],
-        ]);
+        sendResponse(['success' => true]);
     } else {
         sendResponse(['success' => false, 'message' => '新增失敗']);
     }
+
+} elseif ($action === 'get_leaderboard') {
+    global $pdo;
+
+    // 最近 30 天運動總分鐘數前 10 名
+    $sql = "
+        SELECT
+            u.display_name,
+            SUM(w.minutes) AS total
+        FROM workouts w
+        JOIN users u ON w.user_id = u.id
+        WHERE w.date >= (CURRENT_DATE - INTERVAL '30 days')
+        GROUP BY u.id, u.display_name
+        ORDER BY total DESC
+        LIMIT 10
+    ";
+
+    $stmt = $pdo->query($sql);
+    $rows = $stmt->fetchAll();
+
+    foreach ($rows as $i => &$row) {
+        $row['rank'] = $i + 1;
+        $row['total'] = (int)$row['total'];
+    }
+
+    sendResponse(['success' => true, 'data' => $rows]);
+
+} elseif ($action === 'get_dashboard_data') {
+    // ✅ main.js 會用這個 action 來更新：
+    // - Bar：分鐘數
+    // - Line：卡路里
+    // - Pie：各運動種類卡路里分佈
+    global $pdo;
+
+function buildDashboardData(PDO $pdo, int $userId, string $driver, string $range): array {
+    $range = normalizeRange($range);
+
+    // 依 range 決定查詢區間與分組粒度
+    // 1d：用 3 小時一格（00-03, 03-06...）
+    // 1wk/1m/3m：用「日期」一格
+    if ($range === '1d') {
+        // 以 NOW() 往回 24 小時
+        $sqlBarLine = "
+            WITH bins AS (
+                SELECT generate_series(0, 7) AS b
+            )
+            SELECT
+                b.b AS bin,
+                COALESCE(SUM(w.minutes),0) AS total_minutes,
+                COALESCE(SUM(w.calories),0) AS total_calories
+            FROM bins b
+            LEFT JOIN workouts w
+                ON w.user_id = :uid
+               AND w.date >= (NOW() - INTERVAL '24 hours')
+               AND floor(extract(hour from w.date)::numeric / 3)::int = b.b
+            GROUP BY b.b
+            ORDER BY b.b ASC
+        ";
+        $stmt = $pdo->prepare($sqlBarLine);
+        $stmt->execute([':uid' => $userId]);
+        $rows = $stmt->fetchAll();
+
+        $labels = [];
+        $bar = [];
+        $line = [];
+        for ($i=0; $i<8; $i++) {
+            $h = $i * 3;
+            $labels[] = sprintf('%02d:00', $h);
+        }
+        foreach ($rows as $r) {
+            $bar[]  = (int)$r['total_minutes'];
+            $line[] = (int)$r['total_calories'];
+        }
+    } else {
+        $days = ($range === '1wk') ? 7 : (($range === '1m') ? 30 : 90);
+
+        $sqlBarLine = "
+            SELECT
+                (date AT TIME ZONE 'UTC')::date AS d,
+                COALESCE(SUM(minutes),0) AS total_minutes,
+                COALESCE(SUM(calories),0) AS total_calories
+            FROM workouts
+            WHERE user_id = :uid
+              AND date >= (CURRENT_DATE - INTERVAL '{$days} days')
+            GROUP BY (date AT TIME ZONE 'UTC')::date
+            ORDER BY d ASC
+        ";
+        $stmt = $pdo->prepare($sqlBarLine);
+        $stmt->execute([':uid' => $userId]);
+        $rows = $stmt->fetchAll();
+
+        // 產生連續日期 label（補 0）
+        $labels = [];
+        $bar = [];
+        $line = [];
+
+        $mapMin = [];
+        $mapCal = [];
+        foreach ($rows as $r) {
+            $key = (string)$r['d'];
+            $mapMin[$key] = (int)$r['total_minutes'];
+            $mapCal[$key] = (int)$r['total_calories'];
+        }
+
+        $start = new DateTimeImmutable('today');
+        $start = $start->sub(new DateInterval('P' . ($days-1) . 'D'));
+        for ($i=0; $i<$days; $i++) {
+            $d = $start->add(new DateInterval('P' . $i . 'D'))->format('m/d');
+            $key = $start->add(new DateInterval('P' . $i . 'D'))->format('Y-m-d');
+            $labels[] = $d;
+            $bar[] = $mapMin[$key] ?? 0;
+            $line[] = $mapCal[$key] ?? 0;
+        }
+    }
+
+    // Pie：區間內各類型 calories
+    if ($range === '1d') {
+        $where = "date >= (NOW() - INTERVAL '24 hours')";
+    } else {
+        $days = ($range === '1wk') ? 7 : (($range === '1m') ? 30 : 90);
+        $where = "date >= (CURRENT_DATE - INTERVAL '{$days} days')";
+    }
+
+    $sqlPie = "
+        SELECT type, COALESCE(SUM(calories),0) AS total_calories
+        FROM workouts
+        WHERE user_id = :uid
+          AND {$where}
+        GROUP BY type
+    ";
+    $stmt = $pdo->prepare($sqlPie);
+    $stmt->execute([':uid' => $userId]);
+    $pieRows = $stmt->fetchAll();
+
+    // 讓 pie 的 label 順序固定，對應前端圖示/色彩
+    $fixedLabels = ['跑步', '重訓', '腳踏車', '游泳', '瑜珈', '其他'];
+    $pieMap = [];
+    foreach ($pieRows as $r) {
+        $t = (string)$r['type'];
+        $pieMap[$t] = (int)$r['total_calories'];
+    }
+    $pieData = [];
+    foreach ($fixedLabels as $lab) {
+        $pieData[] = $pieMap[$lab] ?? 0;
+    }
+
+    return [
+        'bar' => ['labels' => $labels, 'data' => $bar],
+        'line' => ['labels' => $labels, 'data' => $line],
+        'pie' => ['labels' => $fixedLabels, 'data' => $pieData],
+    ];
+}
+
+function requireLogin(): int {
+    if (!isset($_SESSION['user_id'])) {
+        sendResponse(['success' => false, 'message' => '尚未登入']);
+    }
+    return (int)$_SESSION['user_id'];
+}
+
+// 讀取輸入
+$input  = getJsonInput();
+$action = $input['action'] ?? ($_GET['action'] ?? null);
+
+// --- 公開動作（不需登入） ---
+
+if ($action === 'register') {
+    global $pdo;
+
+    $email = trim((string)($input['email'] ?? ''));
+    $pass  = (string)($input['password'] ?? '');
+    $name  = trim((string)($input['display_name'] ?? 'User'));
+
+    if ($email === '' || $pass === '') {
+        sendResponse(['success' => false, 'message' => '請輸入 Email 和密碼']);
+    }
+
+    // 檢查 email 是否已存在
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE email = :email LIMIT 1");
+    $stmt->execute([':email' => $email]);
+    if ($stmt->fetch()) {
+        sendResponse(['success' => false, 'message' => '此 Email 已被註冊']);
+    }
+
+    $hash = password_hash($pass, PASSWORD_DEFAULT);
+
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO users (email, password_hash, display_name)
+            VALUES (:email, :hash, :name)
+            RETURNING id
+        ");
+        $stmt->execute([':email' => $email, ':hash' => $hash, ':name' => $name]);
+        $userId = (int)$stmt->fetchColumn();
+    } catch (PDOException $e) {
+        sendResponse(['success' => false, 'message' => '註冊失敗', 'error' => $e->getMessage()]);
+    }
+
+    // 自動登入
+    $_SESSION['user_id'] = $userId;
+
+    // 回傳使用者資訊（main.js 需要 id 來存 avatar localStorage key）
+    sendResponse([
+        'success' => true,
+        'data' => [
+            'id' => $userId,
+            'display_name' => $name,
+            'email' => $email,
+            'height' => null,
+            'weight' => null,
+        ]
+    ]);
+
+} elseif ($action === 'get_stats') {
+    // 保留舊 action（如果你哪裡還在用），但修正 MySQL/PGSQL 相容
+    global $pdo;
+
+    $sql = "
+        SELECT
+            date::date AS date,
+            SUM(minutes) AS total
+        FROM workouts
+        WHERE user_id = :uid
+          AND date >= CURRENT_DATE - INTERVAL '7 days'
+        GROUP BY date::date
+        ORDER BY date::date ASC
+    ";
 
 } elseif ($action === 'get_leaderboard') {
     global $pdo, $DB_DRIVER;

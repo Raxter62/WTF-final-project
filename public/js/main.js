@@ -225,18 +225,8 @@ async function handleAddWorkout(e) {
     const json = await res.json();
     if (json.success) {
         alert('新增成功');
-
-        if (json.data?.dashboard) {
-            applyDashboardData(json.data.dashboard);
-        } else {
-            await loadAllCharts();
-        }
-
-        if (json.data?.leaderboard) {
-            renderLeaderboard(json.data.leaderboard);
-        } else {
-            await renderLeaderboard();
-        }
+        await loadAllCharts();
+        await renderLeaderboard();
     } else {
         alert('失敗: ' + json.message);
     }

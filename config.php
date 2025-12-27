@@ -109,7 +109,7 @@ if ($pdo && $DB_DRIVER === 'pgsql') {
             );
         ");
 
-        // leaderboard_snapshots
+        // leaderboard_snapshots（保留原先 schema 想法；目前主流程沒用到，但不刪）
         $pdo->exec("
             CREATE TABLE IF NOT EXISTS leaderboard_snapshots (
                 id BIGSERIAL PRIMARY KEY,
@@ -121,7 +121,7 @@ if ($pdo && $DB_DRIVER === 'pgsql') {
             );
         ");
 
-        // email_notifications
+        // email_notifications（保留原先 schema 想法）
         $pdo->exec("
             CREATE TABLE IF NOT EXISTS email_notifications (
                 id BIGSERIAL PRIMARY KEY,
