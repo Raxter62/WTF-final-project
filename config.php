@@ -1,131 +1,195 @@
 <?php
-// config.php - 資料庫連線與全域設定
+/**
+ * config.php
+ * - 讀取 DATABASE_URL（Neon / Railway / 本機）
+ * - 建立 PDO 連線（PostgreSQL / MySQL）
+ */
+declare(strict_types=1);
 
-// 1. 從環境變數取得 DATABASE_URL
-$databaseUrl = getenv('DATABASE_URL');
-$pdo = null;
-$scheme = null;
+// 避免把 warning/notice 直接噴到前端造成「Unexpected token '<'」
+ini_set('display_errors', '0');
+error_reporting(E_ALL);
 
-if ($databaseUrl) {
-    // 解析 URL (例如：
-    //   postgres://user:pass@host:5432/dbname?sslmode=require
-    //   mysql://user:pass@host:3306/dbname
-    $dbConfig = parse_url($databaseUrl);
-
-    $scheme = $dbConfig['scheme'] ?? 'mysql';
-    $host   = $dbConfig['host'] ?? 'localhost';
-    $port   = $dbConfig['port'] ?? null;
-    $user   = $dbConfig['user'] ?? '';
-    $pass   = $dbConfig['pass'] ?? '';
-    $path   = $dbConfig['path'] ?? '';
-    $query  = $dbConfig['query'] ?? '';
-
-    $dbname = ltrim($path, '/');
-
-    // 預設 port
-    if (!$port) {
-        if (strpos($scheme, 'mysql') === 0) {
-            $port = 3306;
-        } else {
-            $port = 5432;
-        }
+function fc_parse_database_url(string $databaseUrl): array {
+    $cfg = parse_url($databaseUrl);
+    if ($cfg === false) {
+        throw new RuntimeException('Invalid DATABASE_URL');
     }
 
-    // 從 query 組出額外的 DSN 參數（目前主要用在 sslmode）
-    $extraDsn = '';
-    if ($query) {
-        // sslmode=require&xxx=yyy -> ;sslmode=require;xxx=yyy
-        $extraDsn = ';' . str_replace('&', ';', $query);
+    $scheme = strtolower($cfg['scheme'] ?? '');
+    $host   = $cfg['host'] ?? 'localhost';
+    $port   = isset($cfg['port']) ? (int)$cfg['port'] : null;
+    $user   = isset($cfg['user']) ? rawurldecode($cfg['user']) : '';
+    $pass   = isset($cfg['pass']) ? rawurldecode($cfg['pass']) : '';
+    $path   = $cfg['path'] ?? '';
+    $dbname = rawurldecode(ltrim($path, '/'));
+
+    // query 參數（sslmode=require 等）
+    $queryParams = [];
+    if (!empty($cfg['query'])) {
+        parse_str($cfg['query'], $queryParams);
     }
 
-    if (strpos($scheme, 'mysql') === 0) {
-        // 本機如果要用 XAMPP + MySQL，可以給 mysql://... 的 DATABASE_URL
-        $dsn = "mysql:host={$host};port={$port};dbname={$dbname};charset=utf8mb4";
-    } else {
-        // Railway + Neon：使用 PostgreSQL
-        $dsn = "pgsql:host={$host};port={$port};dbname={$dbname}{$extraDsn}";
+    // 正規化 driver 名稱：postgres / postgresql / pgsql 都視為 pgsql
+    $driver = 'mysql';
+    if ($scheme === 'postgres' || $scheme === 'postgresql' || $scheme === 'pgsql') {
+        $driver = 'pgsql';
+    } elseif (str_starts_with($scheme, 'mysql')) {
+        $driver = 'mysql';
     }
 
-    try {
-        $pdo = new PDO($dsn, $user, $pass, [
-            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        ]);
-    } catch (PDOException $e) {
-        die('DB connection failed: ' . $e->getMessage());
+    if ($port === null) {
+        $port = ($driver === 'pgsql') ? 5432 : 3306;
     }
-} else {
-    // 本機測試若沒有 DATABASE_URL，可以在這裡自行填入連線資訊
-    /*
-    $scheme = 'pgsql';
-    $dsn  = 'pgsql:host=localhost;port=5432;dbname=fitconnect';
-    $user = 'postgres';
-    $pass = 'password';
-    try {
-        $pdo = new PDO($dsn, $user, $pass, [
-            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        ]);
-    } catch (PDOException $e) {
-        die('Local DB connection failed: ' . $e->getMessage());
-    }
-    */
+
+    return [
+        'driver' => $driver,
+        'host' => $host,
+        'port' => $port,
+        'dbname' => $dbname,
+        'user' => $user,
+        'pass' => $pass,
+        'query' => $queryParams,
+    ];
 }
 
-// 1.5 自動建立 PostgreSQL 資料表（若尚未存在）
-// 只在使用 PostgreSQL（例如 Neon）時執行，若是本機 MySQL 則略過
-if ($pdo && $scheme && strpos($scheme, 'pgsql') === 0) {
-    try {
-        // 使用者基本資料（含身高體重與 Line 綁定資訊）
+function fc_make_pdo(array $db): PDO {
+    if ($db['driver'] === 'pgsql') {
+        // Neon 通常需要 sslmode=require
+        $sslmode = $db['query']['sslmode'] ?? 'require';
+        $dsn = sprintf(
+            "pgsql:host=%s;port=%d;dbname=%s;sslmode=%s",
+            $db['host'], $db['port'], $db['dbname'], $sslmode
+        );
+    } else {
+        $dsn = sprintf(
+            "mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4",
+            $db['host'], $db['port'], $db['dbname']
+        );
+    }
+
+    $pdo = new PDO($dsn, $db['user'], $db['pass'], [
+        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_EMULATE_PREPARES   => false,
+    ]);
+
+    return $pdo;
+}
+
+/**
+ * 建表（兼容 PostgreSQL / MySQL）
+ * 表結構（符合你原本需求）：
+ * - users: id, name, height_cm, weight_kg, 4位驗證碼(line_bind_code), line_user_id, created_at
+ * - workouts: id, user_id, sport_type, input_time, duration_min, calories
+ * - user_totals: user_id, total_calories, updated_at
+ */
+function fc_ensure_schema(PDO $pdo, string $driver): void {
+    if ($driver === 'pgsql') {
         $pdo->exec("
             CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                email TEXT NOT NULL UNIQUE,
-                password_hash TEXT NOT NULL,
-                display_name TEXT,
+                id BIGSERIAL PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE,
+                height_cm NUMERIC(5,2),
+                weight_kg NUMERIC(5,2),
+                line_bind_code CHAR(4),
                 line_user_id TEXT,
-                line_bind_code VARCHAR(10),
-                line_bind_code_expires_at TIMESTAMPTZ,
-                height NUMERIC(5,2),
-                weight NUMERIC(5,2),
                 created_at TIMESTAMPTZ DEFAULT NOW()
             );
         ");
 
-        // 運動紀錄：每一筆運動上傳紀錄
         $pdo->exec("
             CREATE TABLE IF NOT EXISTS workouts (
                 id BIGSERIAL PRIMARY KEY,
-                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                date TIMESTAMPTZ NOT NULL,
-                type TEXT NOT NULL,
-                minutes INTEGER NOT NULL,
-                calories INTEGER NOT NULL,
-                created_at TIMESTAMPTZ DEFAULT NOW()
+                user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                sport_type TEXT NOT NULL,
+                input_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                duration_min INTEGER NOT NULL CHECK (duration_min >= 0),
+                calories INTEGER NOT NULL CHECK (calories >= 0)
             );
         ");
 
-        // 依使用者與日期的索引，加速統計與排行
-        $pdo->exec("
-            CREATE INDEX IF NOT EXISTS idx_workouts_user_date
-            ON workouts (user_id, date);
-        ");
-
-        // 每位使用者的累積總消耗卡路里
         $pdo->exec("
             CREATE TABLE IF NOT EXISTS user_totals (
-                user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-                total_calories BIGINT NOT NULL DEFAULT 0
+                user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                total_calories BIGINT NOT NULL DEFAULT 0,
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             );
         ");
-    } catch (PDOException $e) {
-        // Schema 初始化失敗不影響主程式執行，可視需要記錄 log
-        // error_log('DB schema init failed: ' . $e->getMessage());
+
+        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_workouts_user_time ON workouts(user_id, input_time);");
+        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_workouts_sport ON workouts(sport_type);");
+
+    } else {
+        // MySQL（給本機 XAMPP 測試用）
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS users (
+                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(255) NOT NULL UNIQUE,
+                height_cm DECIMAL(5,2) NULL,
+                weight_kg DECIMAL(5,2) NULL,
+                line_bind_code CHAR(4) NULL,
+                line_user_id VARCHAR(255) NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        ");
+
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS workouts (
+                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                user_id BIGINT UNSIGNED NOT NULL,
+                sport_type VARCHAR(50) NOT NULL,
+                input_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                duration_min INT NOT NULL,
+                calories INT NOT NULL,
+                CONSTRAINT fk_workouts_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                INDEX idx_workouts_user_time (user_id, input_time),
+                INDEX idx_workouts_sport (sport_type)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        ");
+
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS user_totals (
+                user_id BIGINT UNSIGNED PRIMARY KEY,
+                total_calories BIGINT NOT NULL DEFAULT 0,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                CONSTRAINT fk_totals_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        ");
     }
 }
 
-// 2. 定義 API Keys 為常數
-define('OPENAI_API_KEY',      getenv('OPENAI_API_KEY') ?: '');
-define('LINE_CHANNEL_SECRET', getenv('LINE_CHANNEL_SECRET') ?: '');
-define('LINE_CHANNEL_TOKEN',  getenv('LINE_CHANNEL_TOKEN') ?: '');
-define('RESEND_API_KEY',      getenv('RESEND_API_KEY') ?: '');
+// --- 建立 $pdo 供其他檔案使用 ---
+$pdo = null;
+$DB_DRIVER = null;
+
+$databaseUrl = getenv('DATABASE_URL') ?: '';
+
+try {
+    if ($databaseUrl) {
+        $db = fc_parse_database_url($databaseUrl);
+        $DB_DRIVER = $db['driver'];
+        $pdo = fc_make_pdo($db);
+        fc_ensure_schema($pdo, $DB_DRIVER);
+    } else {
+        // 沒有 DATABASE_URL 時（本機可改這裡）
+        // 建議你本機用 XAMPP：先在 phpMyAdmin 建一個 DB（例如 fitconnect），然後填進來
+        $DB_DRIVER = 'mysql';
+        $pdo = new PDO("mysql:host=127.0.0.1;port=3306;dbname=fitconnect;charset=utf8mb4", "root", "", [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES   => false,
+        ]);
+        fc_ensure_schema($pdo, $DB_DRIVER);
+    }
+} catch (Throwable $e) {
+    // 這裡不要 echo HTML，避免前端解析爆炸；改用 JSON 錯誤格式
+    http_response_code(500);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode([
+        'success' => false,
+        'message' => 'DB connection/init failed',
+        'error'   => $e->getMessage(),
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
