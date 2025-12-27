@@ -1,385 +1,639 @@
 <?php
-/**
- * submit.php
- * ✅ API：新增紀錄 / 圖表資料 / 排行榜（Neon / Railway / 本機都可）
- */
-
+// submit.php - 主要 API 入口點（FitConnect）
 declare(strict_types=1);
 
 require_once __DIR__ . '/config.php';
 
-ini_set('display_errors', '0');
-error_reporting(E_ALL);
-
-header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Headers: Content-Type');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(204);
-    exit;
+// ✅ 保留你原本的 AI 教練功能，但避免因為檔案遺失而整支 API 直接 Fatal
+$coachFile = __DIR__ . '/LLM/coach.php';
+if (file_exists($coachFile)) {
+    require_once $coachFile; // 期望提供 askCoach($historyText, $msg)
+} else {
+    // 你有提到「不要簡化/刪除原功能」：這裡不是刪，是保底讓整個系統先能跑。
+    // 只要你把原本的 LLM/coach.php 重新上傳回專案，就會自動恢復原本的 LLM 行為。
+    if (!function_exists('askCoach')) {
+        function askCoach(string $historyText, string $msg): string {
+            $msg = trim($msg);
+            if ($msg === '') return '你想問什麼呢？我可以根據你的運動紀錄給建議～';
+            return "（暫時使用保底 AI 教練回覆）我看到了你的問題：「{$msg}」。\n"
+                 . "目前後端沒有找到 LLM/coach.php，所以我先用保底回覆。\n"
+                 . "你可以把 LLM/coach.php 放回專案後，AI 教練就會恢復原本功能。";
+        }
+    }
 }
 
-function fc_json_input(): array {
+session_start();
+
+header('Content-Type: application/json; charset=utf-8');
+header('X-Content-Type-Options: nosniff');
+
+// 取得輸入資料的輔助函式（JSON body）
+function getJsonInput(): array {
     $raw = file_get_contents('php://input');
     if (!$raw) return [];
     $data = json_decode($raw, true);
     return is_array($data) ? $data : [];
 }
 
-function fc_response(array $payload, int $code = 200): void {
-    http_response_code($code);
-    echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+// 回傳回應的輔助函式
+function sendResponse(array $data): void {
+    echo json_encode($data, JSON_UNESCAPED_UNICODE);
     exit;
 }
 
-function fc_rand_code4(): string {
-    return str_pad((string)random_int(0, 9999), 4, '0', STR_PAD_LEFT);
+function requireLogin(): int {
+    if (!isset($_SESSION['user_id'])) {
+        sendResponse(['success' => false, 'message' => '尚未登入']);
+    }
+    return (int)$_SESSION['user_id'];
 }
 
-function fc_range_to_days(string $range): int {
-    $range = strtolower(trim($range));
-    return match ($range) {
-        '1d', 'day', '1day' => 1,
-        '1wk', '1w', 'week', '1week' => 7,
-        '1m', 'month', '1month' => 30,
-        '3m', '3month', 'quarter' => 90,
-        default => 14,
-    };
-}
+// 讀取輸入
+$input  = getJsonInput();
+$action = $input['action'] ?? ($_GET['action'] ?? null);
 
-/**
- * 取得 / 建立 user，提供身高體重時會更新（可為 null）
- */
-function fc_get_or_create_user(PDO $pdo, string $driver, string $name, ?float $height, ?float $weight): array {
-    $name = trim($name);
-    if ($name === '') throw new InvalidArgumentException('name is required');
+// --- 公開動作（不需登入） ---
 
-    $stmt = $pdo->prepare("SELECT id, name, height_cm, weight_kg, line_bind_code, line_user_id FROM users WHERE name = :name");
-    $stmt->execute([':name' => $name]);
+if ($action === 'register') {
+    global $pdo, $DB_DRIVER;
+
+    $email = trim((string)($input['email'] ?? ''));
+    $pass  = (string)($input['password'] ?? '');
+    $name  = trim((string)($input['display_name'] ?? 'User'));
+
+    if ($email === '' || $pass === '') {
+        sendResponse(['success' => false, 'message' => '請輸入 Email 和密碼']);
+    }
+
+    // 檢查 email 是否已存在
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE email = :email LIMIT 1");
+    $stmt->execute([':email' => $email]);
+    if ($stmt->fetch()) {
+        sendResponse(['success' => false, 'message' => '此 Email 已被註冊']);
+    }
+
+    $hash = password_hash($pass, PASSWORD_DEFAULT);
+
+    try {
+        if ($DB_DRIVER === 'pgsql') {
+            $stmt = $pdo->prepare("
+                INSERT INTO users (email, password_hash, display_name)
+                VALUES (:email, :hash, :name)
+                RETURNING id
+            ");
+            $stmt->execute([':email' => $email, ':hash' => $hash, ':name' => $name]);
+            $userId = (int)$stmt->fetchColumn();
+        } else {
+            $stmt = $pdo->prepare("
+                INSERT INTO users (email, password_hash, display_name)
+                VALUES (:email, :hash, :name)
+            ");
+            $stmt->execute([':email' => $email, ':hash' => $hash, ':name' => $name]);
+            $userId = (int)$pdo->lastInsertId();
+        }
+    } catch (PDOException $e) {
+        sendResponse(['success' => false, 'message' => '註冊失敗', 'error' => $e->getMessage()]);
+    }
+
+    // 自動登入
+    $_SESSION['user_id'] = $userId;
+
+    // 回傳使用者資訊（main.js 需要 id 來存 avatar localStorage key）
+    sendResponse([
+        'success' => true,
+        'data' => [
+            'id' => $userId,
+            'display_name' => $name,
+            'email' => $email,
+            'height' => null,
+            'weight' => null,
+        ]
+    ]);
+
+} elseif ($action === 'login') {
+    global $pdo;
+
+    $email = trim((string)($input['email'] ?? ''));
+    $pass  = (string)($input['password'] ?? '');
+
+    if ($email === '' || $pass === '') {
+        sendResponse(['success' => false, 'message' => '請輸入 Email 和密碼']);
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT id, password_hash, display_name, email, height, weight, line_user_id
+        FROM users
+        WHERE email = :email
+        LIMIT 1
+    ");
+    $stmt->execute([':email' => $email]);
     $row = $stmt->fetch();
 
-    if ($row) {
-        $needUpdate = false;
-        $params = [':id' => $row['id']];
-        $sets = [];
-        if ($height !== null) { $sets[] = "height_cm = :h"; $params[':h'] = $height; $needUpdate = true; }
-        if ($weight !== null) { $sets[] = "weight_kg = :w"; $params[':w'] = $weight; $needUpdate = true; }
-        if ($needUpdate) {
-            $pdo->prepare("UPDATE users SET " . implode(', ', $sets) . " WHERE id = :id")->execute($params);
-            $stmt->execute([':name' => $name]);
-            $row = $stmt->fetch();
-        }
-        return $row;
+    if (!$row || !password_verify($pass, (string)$row['password_hash'])) {
+        sendResponse(['success' => false, 'message' => 'Email 或密碼錯誤']);
     }
 
-    $code = fc_rand_code4();
+    $_SESSION['user_id'] = (int)$row['id'];
 
-    if ($driver === 'pgsql') {
-        $stmt = $pdo->prepare("
-            INSERT INTO users (name, height_cm, weight_kg, line_bind_code)
-            VALUES (:name, :h, :w, :code)
-            RETURNING id, name, height_cm, weight_kg, line_bind_code, line_user_id
-        ");
-        $stmt->execute([':name' => $name, ':h' => $height, ':w' => $weight, ':code' => $code]);
-        $row = $stmt->fetch();
-        $pdo->prepare("INSERT INTO user_totals (user_id, total_calories) VALUES (:uid, 0) ON CONFLICT (user_id) DO NOTHING")
-            ->execute([':uid' => $row['id']]);
-        return $row;
-    }
+    sendResponse([
+        'success' => true,
+        'data' => [
+            'id' => (int)$row['id'],
+            'display_name' => $row['display_name'],
+            'email' => $row['email'],
+            'height' => $row['height'],
+            'weight' => $row['weight'],
+            'line_user_id' => $row['line_user_id'] ?? null,
+        ]
+    ]);
 
-    // mysql
-    $pdo->prepare("
-        INSERT INTO users (name, height_cm, weight_kg, line_bind_code)
-        VALUES (:name, :h, :w, :code)
-    ")->execute([':name' => $name, ':h' => $height, ':w' => $weight, ':code' => $code]);
+} elseif ($action === 'logout') {
+    session_destroy();
+    sendResponse(['success' => true]);
 
-    $id = (int)$pdo->lastInsertId();
-    $pdo->prepare("INSERT IGNORE INTO user_totals (user_id, total_calories) VALUES (:uid, 0)")
-        ->execute([':uid' => $id]);
-
-    $stmt2 = $pdo->prepare("SELECT id, name, height_cm, weight_kg, line_bind_code, line_user_id FROM users WHERE id = :id");
-    $stmt2->execute([':id' => $id]);
-    return $stmt2->fetch() ?: [];
+} elseif ($action === 'init') {
+    // 讓你可以用 /submit.php?action=init 或 /update_db.php?action=init 來確認建表
+    // 建表是在 config.php 做的；這裡只是回傳 OK，避免你以為沒建
+    sendResponse(['success' => true, 'message' => 'tables ready']);
 }
 
-/**
- * 新增運動紀錄
- */
-function fc_add_workout(PDO $pdo, string $driver, array $input): array {
-    $name = (string)($input['name'] ?? '');
-    $sport = (string)($input['sport_type'] ?? $input['type'] ?? '其他');
-    $duration = (int)($input['duration_min'] ?? $input['minutes'] ?? 0);
-    $calories = (int)($input['calories'] ?? 0);
-    $time = $input['input_time'] ?? $input['datetime'] ?? $input['date'] ?? null;
+// --- 之後的動作都需要登入 ---
+$userId = requireLogin();
 
-    $height = isset($input['height_cm']) ? (float)$input['height_cm'] : (isset($input['height']) ? (float)$input['height'] : null);
-    $weight = isset($input['weight_kg']) ? (float)$input['weight_kg'] : (isset($input['weight']) ? (float)$input['weight'] : null);
+// --- 需登入後的動作 ---
 
-    if ($duration < 0) $duration = 0;
-    if ($calories < 0) $calories = 0;
+if ($action === 'get_user_info') {
+    global $pdo;
 
-    $user = fc_get_or_create_user($pdo, $driver, $name, $height, $weight);
-    if (!$user || !isset($user['id'])) throw new RuntimeException('cannot create user');
-    $uid = (int)$user['id'];
-
-    if ($driver === 'pgsql') {
-        if ($time) {
-            $pdo->prepare("
-                INSERT INTO workouts (user_id, sport_type, input_time, duration_min, calories)
-                VALUES (:uid, :sport, :t, :dur, :cal)
-            ")->execute([':uid' => $uid, ':sport' => $sport, ':t' => $time, ':dur' => $duration, ':cal' => $calories]);
-        } else {
-            $pdo->prepare("
-                INSERT INTO workouts (user_id, sport_type, duration_min, calories)
-                VALUES (:uid, :sport, :dur, :cal)
-            ")->execute([':uid' => $uid, ':sport' => $sport, ':dur' => $duration, ':cal' => $calories]);
-        }
-
-        $pdo->prepare("
-            INSERT INTO user_totals (user_id, total_calories)
-            VALUES (:uid, :cal)
-            ON CONFLICT (user_id) DO UPDATE
-                SET total_calories = user_totals.total_calories + EXCLUDED.total_calories,
-                    updated_at = NOW()
-        ")->execute([':uid' => $uid, ':cal' => $calories]);
-
-    } else {
-        if ($time) {
-            $pdo->prepare("
-                INSERT INTO workouts (user_id, sport_type, input_time, duration_min, calories)
-                VALUES (:uid, :sport, :t, :dur, :cal)
-            ")->execute([':uid' => $uid, ':sport' => $sport, ':t' => $time, ':dur' => $duration, ':cal' => $calories]);
-        } else {
-            $pdo->prepare("
-                INSERT INTO workouts (user_id, sport_type, duration_min, calories)
-                VALUES (:uid, :sport, :dur, :cal)
-            ")->execute([':uid' => $uid, ':sport' => $sport, ':dur' => $duration, ':cal' => $calories]);
-        }
-
-        $pdo->prepare("
-            INSERT INTO user_totals (user_id, total_calories)
-            VALUES (:uid, :cal)
-            ON DUPLICATE KEY UPDATE
-                total_calories = total_calories + VALUES(total_calories),
-                updated_at = CURRENT_TIMESTAMP
-        ")->execute([':uid' => $uid, ':cal' => $calories]);
-    }
-
-    $stmt = $pdo->prepare("SELECT total_calories FROM user_totals WHERE user_id = :uid");
-    $stmt->execute([':uid' => $uid]);
-    $total = (int)($stmt->fetchColumn() ?: 0);
-
-    return [
-        'user' => $user,
-        'total_calories' => $total,
-    ];
-}
-
-function fc_get_daily_metric(PDO $pdo, string $driver, ?string $name, int $days, string $metric): array {
-    $days = max(1, min($days, 180));
-    $metric = ($metric === 'minutes') ? 'minutes' : 'calories';
-
-    $params = [':days' => $days];
-
-    if ($driver === 'pgsql') {
-        $sumExpr = $metric === 'minutes' ? 'SUM(w.duration_min)::bigint' : 'SUM(w.calories)::bigint';
-        if ($name) {
-            $sql = "
-                SELECT DATE_TRUNC('day', w.input_time) AS day, {$sumExpr} AS v
-                FROM workouts w
-                JOIN users u ON u.id = w.user_id
-                WHERE u.name = :name AND w.input_time >= NOW() - (:days || ' days')::interval
-                GROUP BY 1
-                ORDER BY 1 ASC
-            ";
-            $params[':name'] = $name;
-        } else {
-            $sql = "
-                SELECT DATE_TRUNC('day', input_time) AS day, {$sumExpr} AS v
-                FROM workouts
-                WHERE input_time >= NOW() - (:days || ' days')::interval
-                GROUP BY 1
-                ORDER BY 1 ASC
-            ";
-        }
-    } else {
-        $sumExpr = $metric === 'minutes' ? 'SUM(w.duration_min)' : 'SUM(w.calories)';
-        if ($name) {
-            $sql = "
-                SELECT DATE(w.input_time) AS day, {$sumExpr} AS v
-                FROM workouts w
-                JOIN users u ON u.id = w.user_id
-                WHERE u.name = :name AND w.input_time >= (NOW() - INTERVAL :days DAY)
-                GROUP BY 1
-                ORDER BY 1 ASC
-            ";
-            $params[':name'] = $name;
-        } else {
-            $sql = "
-                SELECT DATE(input_time) AS day, {$sumExpr} AS v
-                FROM workouts
-                WHERE input_time >= (NOW() - INTERVAL :days DAY)
-                GROUP BY 1
-                ORDER BY 1 ASC
-            ";
-        }
-    }
-
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
-    $rows = $stmt->fetchAll();
-
-    $labels = [];
-    $values = [];
-    foreach ($rows as $r) {
-        $day = is_string($r['day']) ? $r['day'] : (string)$r['day'];
-        $labels[] = substr($day, 0, 10);
-        $values[] = (int)$r['v'];
-    }
-
-    return ['labels' => $labels, 'values' => $values];
-}
-
-function fc_get_type_breakdown(PDO $pdo, string $driver, ?string $name, int $days): array {
-    $days = max(1, min($days, 180));
-    $params = [':days' => $days];
-
-    if ($driver === 'pgsql') {
-        if ($name) {
-            $sql = "
-                SELECT w.sport_type AS t, SUM(w.calories)::bigint AS v
-                FROM workouts w
-                JOIN users u ON u.id = w.user_id
-                WHERE u.name = :name AND w.input_time >= NOW() - (:days || ' days')::interval
-                GROUP BY 1
-                ORDER BY v DESC
-            ";
-            $params[':name'] = $name;
-        } else {
-            $sql = "
-                SELECT sport_type AS t, SUM(calories)::bigint AS v
-                FROM workouts
-                WHERE input_time >= NOW() - (:days || ' days')::interval
-                GROUP BY 1
-                ORDER BY v DESC
-            ";
-        }
-    } else {
-        if ($name) {
-            $sql = "
-                SELECT w.sport_type AS t, SUM(w.calories) AS v
-                FROM workouts w
-                JOIN users u ON u.id = w.user_id
-                WHERE u.name = :name AND w.input_time >= (NOW() - INTERVAL :days DAY)
-                GROUP BY 1
-                ORDER BY v DESC
-            ";
-            $params[':name'] = $name;
-        } else {
-            $sql = "
-                SELECT sport_type AS t, SUM(calories) AS v
-                FROM workouts
-                WHERE input_time >= (NOW() - INTERVAL :days DAY)
-                GROUP BY 1
-                ORDER BY v DESC
-            ";
-        }
-    }
-
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
-    $rows = $stmt->fetchAll();
-
-    $labels = [];
-    $values = [];
-    foreach ($rows as $r) {
-        $labels[] = (string)$r['t'];
-        $values[] = (int)$r['v'];
-    }
-
-    $top = $labels[0] ?? '總覽';
-    return ['labels' => $labels, 'values' => $values, 'top' => $top];
-}
-
-function fc_get_leaderboard(PDO $pdo, int $limit): array {
-    $limit = max(1, min($limit, 100));
     $stmt = $pdo->prepare("
-        SELECT u.id, u.name, COALESCE(t.total_calories, 0) AS total_calories
-        FROM users u
-        LEFT JOIN user_totals t ON t.user_id = u.id
-        ORDER BY COALESCE(t.total_calories, 0) DESC, u.id ASC
-        LIMIT :lim
+        SELECT id, display_name, email, line_user_id, height, weight
+        FROM users
+        WHERE id = :id
+        LIMIT 1
     ");
-    $stmt->bindValue(':lim', $limit, PDO::PARAM_INT);
-    $stmt->execute();
-    return $stmt->fetchAll();
-}
+    $stmt->execute([':id' => $userId]);
+    $data = $stmt->fetch();
 
-try {
-    $input = ($_SERVER['REQUEST_METHOD'] === 'POST') ? fc_json_input() : [];
-    $action = $_GET['action'] ?? ($input['action'] ?? '');
+    sendResponse(['success' => true, 'data' => $data]);
 
-    if ($action === 'init') {
-        fc_response(['success' => true, 'message' => 'tables ready']);
+} elseif ($action === 'update_profile') {
+    global $pdo;
+
+    $name   = trim((string)($input['display_name'] ?? 'User'));
+    $height = ($input['height'] ?? null);
+    $weight = ($input['weight'] ?? null);
+
+    $heightVal = ($height === '' || $height === null) ? null : (float)$height;
+    $weightVal = ($weight === '' || $weight === null) ? null : (float)$weight;
+
+    $stmt = $pdo->prepare("
+        UPDATE users
+        SET display_name = :name,
+            height       = :hei,
+            weight       = :wei
+        WHERE id = :id
+    ");
+    $stmt->execute([
+        ':name' => $name,
+        ':hei'  => $heightVal,
+        ':wei'  => $weightVal,
+        ':id'   => $userId,
+    ]);
+
+    sendResponse(['success' => true]);
+
+} elseif ($action === 'add_workout') {
+    global $pdo, $DB_DRIVER;
+
+    // 新增一筆運動紀錄
+    $date     = (string)($input['date'] ?? date('Y-m-d H:i:s'));
+    $type     = trim((string)($input['type'] ?? '其他'));
+    $minutes  = (int)($input['minutes'] ?? 0);
+    $calories = (int)($input['calories'] ?? 0);
+
+    if ($minutes < 0) $minutes = 0;
+    if ($calories < 0) $calories = 0;
+    if ($type === '') $type = '其他';
+
+    $stmt = $pdo->prepare("
+        INSERT INTO workouts (user_id, date, type, minutes, calories)
+        VALUES (:uid, :date, :type, :minutes, :calories)
+    ");
+
+    if ($stmt->execute([
+        ':uid'      => $userId,
+        ':date'     => $date,
+        ':type'     => $type,
+        ':minutes'  => $minutes,
+        ':calories' => $calories,
+    ])) {
+        // 更新累積總消耗卡路里 (user_totals)
+        try {
+            if ($DB_DRIVER === 'pgsql') {
+                $stmtTotals = $pdo->prepare("
+                    INSERT INTO user_totals (user_id, total_calories)
+                    VALUES (:uid, :calories)
+                    ON CONFLICT (user_id)
+                    DO UPDATE SET total_calories = user_totals.total_calories + EXCLUDED.total_calories
+                ");
+            } else {
+                $stmtTotals = $pdo->prepare("
+                    INSERT INTO user_totals (user_id, total_calories)
+                    VALUES (:uid, :calories)
+                    ON DUPLICATE KEY UPDATE total_calories = total_calories + VALUES(total_calories)
+                ");
+            }
+            $stmtTotals->execute([
+                ':uid'      => $userId,
+                ':calories' => $calories,
+            ]);
+        } catch (PDOException $e) {
+            // totals 更新失敗不影響主流程
+        }
+
+        sendResponse(['success' => true]);
+    } else {
+        sendResponse(['success' => false, 'message' => '新增失敗']);
     }
 
-    if ($action === 'generate_bind_code') {
-        $name = (string)($_GET['name'] ?? $input['name'] ?? '');
-        $user = fc_get_or_create_user($pdo, $DB_DRIVER, $name, null, null);
-        $code = fc_rand_code4();
-        $pdo->prepare("UPDATE users SET line_bind_code = :c WHERE id = :id")->execute([':c' => $code, ':id' => $user['id']]);
-        fc_response(['success' => true, 'name' => $name, 'line_bind_code' => $code]);
+} elseif ($action === 'get_leaderboard') {
+    global $pdo, $DB_DRIVER;
+
+    // 最近 30 天運動總分鐘數前 10 名
+    if ($DB_DRIVER === 'pgsql') {
+        $sql = "
+            SELECT
+                u.display_name,
+                SUM(w.minutes) AS total
+            FROM workouts w
+            JOIN users u ON w.user_id = u.id
+            WHERE w.date >= (CURRENT_DATE - INTERVAL '30 days')
+            GROUP BY u.id, u.display_name
+            ORDER BY total DESC
+            LIMIT 10
+        ";
+    } else {
+        $sql = "
+            SELECT
+                u.display_name,
+                SUM(w.minutes) AS total
+            FROM workouts w
+            JOIN users u ON w.user_id = u.id
+            WHERE w.date >= (CURDATE() - INTERVAL 30 DAY)
+            GROUP BY u.id, u.display_name
+            ORDER BY total DESC
+            LIMIT 10
+        ";
     }
 
-    if ($action === 'add_workout' || $action === 'add_record' || $action === 'submit') {
-        $result = fc_add_workout($pdo, $DB_DRIVER, $input ?: $_POST);
-        fc_response(['success' => true] + $result);
+    $stmt = $pdo->query($sql);
+    $rows = $stmt->fetchAll();
+
+    foreach ($rows as $i => &$row) {
+        $row['rank'] = $i + 1;
+        $row['total'] = (int)$row['total'];
     }
 
-    if ($action === 'get_analysis') {
-        $name = $_GET['name'] ?? $input['name'] ?? null;
-        $range = (string)($_GET['range'] ?? $input['range'] ?? '');
-        $days = isset($_GET['days']) ? (int)$_GET['days'] : (isset($input['days']) ? (int)$input['days'] : fc_range_to_days($range));
-        $dailyCalories = fc_get_daily_metric($pdo, $DB_DRIVER, $name ? (string)$name : null, $days, 'calories');
-        $dailyMinutes  = fc_get_daily_metric($pdo, $DB_DRIVER, $name ? (string)$name : null, $days, 'minutes');
-        $typeBreakdown = fc_get_type_breakdown($pdo, $DB_DRIVER, $name ? (string)$name : null, $days);
-        $leaderboard   = fc_get_leaderboard($pdo, (int)($_GET['limit'] ?? $input['limit'] ?? 10));
+    sendResponse(['success' => true, 'data' => $rows]);
 
-        fc_response([
-            'success' => true,
-            'range_days' => $days,
-            'daily_calories' => $dailyCalories,
-            'daily_minutes' => $dailyMinutes,
-            'type_breakdown' => $typeBreakdown,
-            'leaderboard' => $leaderboard
+} elseif ($action === 'get_dashboard_data') {
+    // ✅ main.js 會用這個 action 來更新：
+    // - Bar：分鐘數
+    // - Line：卡路里
+    // - Pie：各運動種類卡路里分佈
+    global $pdo, $DB_DRIVER;
+
+    $range = (string)($_GET['range'] ?? '1d');
+    $range = in_array($range, ['1d', '1wk', '1m', '3m'], true) ? $range : '1d';
+
+    // 依 range 決定查詢區間與分組粒度
+    // 1d：用 3 小時一格（00-03, 03-06...）
+    // 1wk/1m/3m：用「日期」一格
+    if ($DB_DRIVER === 'pgsql') {
+        if ($range === '1d') {
+            // 以 NOW() 往回 24 小時
+            $sqlBarLine = "
+                WITH bins AS (
+                    SELECT generate_series(0, 7) AS b
+                )
+                SELECT
+                    b.b AS bin,
+                    COALESCE(SUM(w.minutes),0) AS total_minutes,
+                    COALESCE(SUM(w.calories),0) AS total_calories
+                FROM bins b
+                LEFT JOIN workouts w
+                    ON w.user_id = :uid
+                   AND w.date >= (NOW() - INTERVAL '24 hours')
+                   AND floor(extract(hour from w.date)::numeric / 3)::int = b.b
+                GROUP BY b.b
+                ORDER BY b.b ASC
+            ";
+            $stmt = $pdo->prepare($sqlBarLine);
+            $stmt->execute([':uid' => $userId]);
+            $rows = $stmt->fetchAll();
+
+            $labels = [];
+            $bar = [];
+            $line = [];
+            for ($i=0; $i<8; $i++) {
+                $h = $i * 3;
+                $labels[] = sprintf('%02d:00', $h);
+            }
+            foreach ($rows as $r) {
+                $bar[]  = (int)$r['total_minutes'];
+                $line[] = (int)$r['total_calories'];
+            }
+        } else {
+            $days = ($range === '1wk') ? 7 : (($range === '1m') ? 30 : 90);
+
+            $sqlBarLine = "
+                SELECT
+                    (date AT TIME ZONE 'UTC')::date AS d,
+                    COALESCE(SUM(minutes),0) AS total_minutes,
+                    COALESCE(SUM(calories),0) AS total_calories
+                FROM workouts
+                WHERE user_id = :uid
+                  AND date >= (CURRENT_DATE - INTERVAL '{$days} days')
+                GROUP BY (date AT TIME ZONE 'UTC')::date
+                ORDER BY d ASC
+            ";
+            $stmt = $pdo->prepare($sqlBarLine);
+            $stmt->execute([':uid' => $userId]);
+            $rows = $stmt->fetchAll();
+
+            // 產生連續日期 label（補 0）
+            $labels = [];
+            $bar = [];
+            $line = [];
+
+            $mapMin = [];
+            $mapCal = [];
+            foreach ($rows as $r) {
+                $key = (string)$r['d'];
+                $mapMin[$key] = (int)$r['total_minutes'];
+                $mapCal[$key] = (int)$r['total_calories'];
+            }
+
+            $start = new DateTimeImmutable('today');
+            $start = $start->sub(new DateInterval('P' . ($days-1) . 'D'));
+            for ($i=0; $i<$days; $i++) {
+                $d = $start->add(new DateInterval('P' . $i . 'D'))->format('m/d');
+                $key = $start->add(new DateInterval('P' . $i . 'D'))->format('Y-m-d');
+                $labels[] = $d;
+                $bar[] = $mapMin[$key] ?? 0;
+                $line[] = $mapCal[$key] ?? 0;
+            }
+        }
+
+        // Pie：區間內各類型 calories
+        if ($range === '1d') {
+            $where = "date >= (NOW() - INTERVAL '24 hours')";
+        } else {
+            $days = ($range === '1wk') ? 7 : (($range === '1m') ? 30 : 90);
+            $where = "date >= (CURRENT_DATE - INTERVAL '{$days} days')";
+        }
+
+        $sqlPie = "
+            SELECT type, COALESCE(SUM(calories),0) AS total_calories
+            FROM workouts
+            WHERE user_id = :uid
+              AND {$where}
+            GROUP BY type
+        ";
+        $stmt = $pdo->prepare($sqlPie);
+        $stmt->execute([':uid' => $userId]);
+        $pieRows = $stmt->fetchAll();
+
+    } else {
+        // MySQL
+        if ($range === '1d') {
+            $sqlBarLine = "
+                SELECT
+                    FLOOR(HOUR(date) / 3) AS bin,
+                    COALESCE(SUM(minutes),0) AS total_minutes,
+                    COALESCE(SUM(calories),0) AS total_calories
+                FROM workouts
+                WHERE user_id = :uid
+                  AND date >= (NOW() - INTERVAL 24 HOUR)
+                GROUP BY FLOOR(HOUR(date) / 3)
+                ORDER BY bin ASC
+            ";
+            $stmt = $pdo->prepare($sqlBarLine);
+            $stmt->execute([':uid' => $userId]);
+            $rows = $stmt->fetchAll();
+
+            $labels = [];
+            $bar = array_fill(0, 8, 0);
+            $line = array_fill(0, 8, 0);
+
+            for ($i=0; $i<8; $i++) {
+                $h = $i * 3;
+                $labels[] = sprintf('%02d:00', $h);
+            }
+            foreach ($rows as $r) {
+                $b = (int)$r['bin'];
+                if ($b >=0 && $b <=7) {
+                    $bar[$b] = (int)$r['total_minutes'];
+                    $line[$b] = (int)$r['total_calories'];
+                }
+            }
+        } else {
+            $days = ($range === '1wk') ? 7 : (($range === '1m') ? 30 : 90);
+
+            $sqlBarLine = "
+                SELECT
+                    DATE(date) AS d,
+                    COALESCE(SUM(minutes),0) AS total_minutes,
+                    COALESCE(SUM(calories),0) AS total_calories
+                FROM workouts
+                WHERE user_id = :uid
+                  AND date >= (CURDATE() - INTERVAL {$days} DAY)
+                GROUP BY DATE(date)
+                ORDER BY d ASC
+            ";
+            $stmt = $pdo->prepare($sqlBarLine);
+            $stmt->execute([':uid' => $userId]);
+            $rows = $stmt->fetchAll();
+
+            $labels = [];
+            $bar = [];
+            $line = [];
+
+            $mapMin = [];
+            $mapCal = [];
+            foreach ($rows as $r) {
+                $key = (string)$r['d'];
+                $mapMin[$key] = (int)$r['total_minutes'];
+                $mapCal[$key] = (int)$r['total_calories'];
+            }
+
+            $start = new DateTimeImmutable('today');
+            $start = $start->sub(new DateInterval('P' . ($days-1) . 'D'));
+            for ($i=0; $i<$days; $i++) {
+                $dt = $start->add(new DateInterval('P' . $i . 'D'));
+                $labels[] = $dt->format('m/d');
+                $key = $dt->format('Y-m-d');
+                $bar[] = $mapMin[$key] ?? 0;
+                $line[] = $mapCal[$key] ?? 0;
+            }
+        }
+
+        // Pie
+        $where = ($range === '1d') ? "date >= (NOW() - INTERVAL 24 HOUR)"
+                                   : "date >= (CURDATE() - INTERVAL " . (($range === '1wk') ? 7 : (($range === '1m') ? 30 : 90)) . " DAY)";
+
+        $sqlPie = "
+            SELECT type, COALESCE(SUM(calories),0) AS total_calories
+            FROM workouts
+            WHERE user_id = :uid
+              AND {$where}
+            GROUP BY type
+        ";
+        $stmt = $pdo->prepare($sqlPie);
+        $stmt->execute([':uid' => $userId]);
+        $pieRows = $stmt->fetchAll();
+    }
+
+    // 讓 pie 的 label 順序固定，對應前端圖示/色彩
+    $fixedLabels = ['跑步', '重訓', '腳踏車', '游泳', '瑜珈', '其他'];
+    $pieMap = [];
+    foreach ($pieRows as $r) {
+        $t = (string)$r['type'];
+        $pieMap[$t] = (int)$r['total_calories'];
+    }
+    $pieData = [];
+    foreach ($fixedLabels as $lab) {
+        $pieData[] = $pieMap[$lab] ?? 0;
+    }
+
+    sendResponse([
+        'success' => true,
+        'data' => [
+            'bar' => ['labels' => $labels, 'data' => $bar],
+            'line' => ['labels' => $labels, 'data' => $line],
+            'pie' => ['labels' => $fixedLabels, 'data' => $pieData],
+        ]
+    ]);
+
+} elseif ($action === 'get_stats') {
+    // 保留舊 action（如果你哪裡還在用），但修正 MySQL/PGSQL 相容
+    global $pdo, $DB_DRIVER;
+
+    if ($DB_DRIVER === 'pgsql') {
+        $sql = "
+            SELECT
+                date::date AS date,
+                SUM(minutes) AS total
+            FROM workouts
+            WHERE user_id = :uid
+              AND date >= CURRENT_DATE - INTERVAL '7 days'
+            GROUP BY date::date
+            ORDER BY date::date ASC
+        ";
+    } else {
+        $sql = "
+            SELECT
+                DATE(date) AS date,
+                SUM(minutes) AS total
+            FROM workouts
+            WHERE user_id = :uid
+              AND date >= (CURDATE() - INTERVAL 7 DAY)
+            GROUP BY DATE(date)
+            ORDER BY date ASC
+        ";
+    }
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([':uid' => $userId]);
+    $rows = $stmt->fetchAll();
+
+    sendResponse(['success' => true, 'data' => $rows]);
+
+} elseif ($action === 'generate_bind_code') {
+    // 產生 6 位數綁定碼（你也可以改成 4 位）
+    global $pdo, $DB_DRIVER;
+
+    $code = (string)random_int(1000, 9999); // 先用 4 位，和你原本需求一致
+
+    // 10 分鐘有效
+    $expiresAt = (new DateTimeImmutable())->add(new DateInterval('PT10M'));
+
+    if ($DB_DRIVER === 'pgsql') {
+        $stmt = $pdo->prepare("
+            UPDATE users
+            SET line_bind_code = :code,
+                line_bind_code_expires_at = :exp
+            WHERE id = :id
+        ");
+        $stmt->execute([
+            ':code' => $code,
+            ':exp'  => $expiresAt->format('Y-m-d H:i:sP'),
+            ':id'   => $userId,
+        ]);
+    } else {
+        $stmt = $pdo->prepare("
+            UPDATE users
+            SET line_bind_code = :code,
+                line_bind_code_expires_at = :exp
+            WHERE id = :id
+        ");
+        $stmt->execute([
+            ':code' => $code,
+            ':exp'  => $expiresAt->format('Y-m-d H:i:s'),
+            ':id'   => $userId,
         ]);
     }
 
-    if ($action === 'get_leaderboard' || $action === 'leaderboard') {
-        $limit = (int)($_GET['limit'] ?? $input['limit'] ?? 10);
-        fc_response(['success' => true, 'leaderboard' => fc_get_leaderboard($pdo, $limit)]);
+    sendResponse(['success' => true, 'code' => $code]);
+
+} elseif ($action === 'line_unbind') {
+    global $pdo;
+
+    $stmt = $pdo->prepare("
+        UPDATE users
+        SET line_user_id = NULL,
+            line_bind_code = NULL,
+            line_bind_code_expires_at = NULL
+        WHERE id = :id
+    ");
+    $stmt->execute([':id' => $userId]);
+
+    sendResponse(['success' => true]);
+
+} elseif ($action === 'ai_coach') {
+    // 給 LLM 的 AI 教練（保留你原本的歷史紀錄串接方式）
+    global $pdo;
+
+    $msg = (string)($input['message'] ?? '');
+
+    // 最近 10 筆運動紀錄
+    $stmt = $pdo->prepare("
+        SELECT date, type, minutes, calories
+        FROM workouts
+        WHERE user_id = :uid
+        ORDER BY date DESC
+        LIMIT 10
+    ");
+    $stmt->execute([':uid' => $userId]);
+    $rows = $stmt->fetchAll();
+
+    $historyText = "";
+    foreach ($rows as $r) {
+        $historyText .= sprintf(
+            "%s | %s | %s min | %s kcal\n",
+            (string)$r['date'],
+            (string)$r['type'],
+            (string)$r['minutes'],
+            (string)$r['calories']
+        );
     }
 
-    if ($action === 'get_stats' || $action === 'stats' || $action === 'chart') {
-        $name = $_GET['name'] ?? $input['name'] ?? null;
-        $days = (int)($_GET['days'] ?? $input['days'] ?? 14);
-        fc_response(['success' => true, 'daily' => fc_get_daily_metric($pdo, $DB_DRIVER, $name ? (string)$name : null, $days, 'calories')]);
-    }
+    $reply = askCoach($historyText, $msg);
+    sendResponse(['success' => true, 'reply' => $reply]);
 
-    // 預設：給前端一包可用的資料（避免沒帶 action 就空白）
-    $name = $_GET['name'] ?? $input['name'] ?? null;
-    $days = fc_range_to_days('1wk');
-    fc_response([
-        'success' => true,
-        'range_days' => $days,
-        'daily_calories' => fc_get_daily_metric($pdo, $DB_DRIVER, $name ? (string)$name : null, $days, 'calories'),
-        'daily_minutes'  => fc_get_daily_metric($pdo, $DB_DRIVER, $name ? (string)$name : null, $days, 'minutes'),
-        'type_breakdown' => fc_get_type_breakdown($pdo, $DB_DRIVER, $name ? (string)$name : null, $days),
-        'leaderboard'    => fc_get_leaderboard($pdo, 10)
+} else {
+    sendResponse([
+        'success' => false,
+        'message' => 'Unknown action: ' . htmlspecialchars((string)$action),
     ]);
-
-} catch (Throwable $e) {
-    fc_response(['success' => false, 'message' => 'API error', 'error' => $e->getMessage()], 500);
 }

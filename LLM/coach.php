@@ -1,5 +1,6 @@
 <?php
 // LLM/coach.php
+require_once __DIR__ . '/config.php';
 
 function askCoach($historyText, $userMessage) {
     $apiKey = OPENAI_API_KEY;

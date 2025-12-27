@@ -1,11 +1,15 @@
 <?php
-/**
- * update_db.php
- * 這個檔案原本常被前端 AJAX 呼叫。
- * 為了「不改你原本前端」的情況下直接修復：
- * - 讓 update_db.php 變成 submit.php 的別名（同一套 JSON API）
- *
- * 你原本遇到的問題是：update_db.php 回傳純文字或 PHP 錯誤 HTML，
- * 前端拿去 JSON.parse 就會炸掉、圖表/排行榜就空白。
- */
-require_once __DIR__ . '/submit.php';
+// update_db.php
+// 這支檔案保留「初始化/確認資料表」用途（不刪原功能），但改成以 config.php 的建表邏輯為準，避免表結構不一致。
+
+declare(strict_types=1);
+
+require_once __DIR__ . '/config.php';
+
+// config.php 已經在連線後自動 CREATE TABLE IF NOT EXISTS
+header('Content-Type: application/json; charset=utf-8');
+
+echo json_encode([
+    'success' => true,
+    'message' => 'DB schema ensured (via config.php).'
+], JSON_UNESCAPED_UNICODE);

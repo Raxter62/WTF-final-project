@@ -14,13 +14,10 @@ const SPORT_ICONS = {
 document.addEventListener('DOMContentLoaded', () => {
     checkLogin();
     setupForms();
-    setupForms();
-    generateAvatarGrid();
-    setupCoachInteraction();
 
-    // 預設日期與時間
-    const datePart = document.getElementById('input-date-part');
-    const timePart = document.getElementById('input-time-part');
+    // Default date/time
+    const datePart = document.getElementById('input-date');
+    const timePart = document.getElementById('input-time');
     if (datePart && timePart) {
         const now = new Date();
         const year = now.getFullYear();
@@ -46,427 +43,145 @@ async function checkLogin() {
         } else {
             showLogin();
         }
-    } catch (e) { showLogin(); }
+    } catch (e) {
+        console.warn('checkLogin failed:', e);
+        showLogin();
+    }
 }
 
 function showLogin() {
-    document.getElementById('auth-view').classList.remove('hidden');
-    document.getElementById('dashboard-view').classList.add('hidden');
-    document.getElementById('ai-coach-container').classList.add('hidden');
+    document.getElementById('auth-container').style.display = 'block';
+    document.getElementById('dashboard-container').style.display = 'none';
 }
 
 function showDashboard() {
-    document.getElementById('auth-view').classList.add('hidden');
-    document.getElementById('dashboard-view').classList.remove('hidden');
-    document.getElementById('ai-coach-container').classList.remove('hidden');
-
-    document.getElementById('user-display-name').textContent = currentUser.display_name;
-    // document.getElementById('new-display-name').value = currentUser.display_name; // remove old Input
+    document.getElementById('auth-container').style.display = 'none';
+    document.getElementById('dashboard-container').style.display = 'block';
 
     updateProfileUI();
+    loadAllCharts();
+}
 
-    // 載入頭像
+async function handleLogin(e) {
+    e.preventDefault();
+    if (isDemoMode) { demoLogin(); return; }
+
+    const fd = new FormData(e.target);
+    const email = (fd.get('email') || '').toString().trim();
+    const password = (fd.get('password') || '').toString();
+
+    if (!email || !password) { alert('請輸入 Email 和密碼'); return; }
+
+    const res = await fetchPost('login', { email, password });
+    if (res.success) {
+        // 後端會回傳使用者資訊
+        currentUser = res.data || currentUser;
+        showDashboard();
+    } else {
+        alert(res.message || '登入失敗');
+    }
+}
+
+async function handleRegister(e) {
+    e.preventDefault();
+    if (isDemoMode) { demoLogin(); return; }
+
+    const fd = new FormData(e.target);
+    const display_name = (fd.get('display_name') || '').toString().trim();
+    const email = (fd.get('email') || '').toString().trim();
+    const password = (fd.get('password') || '').toString();
+    const password2 = (fd.get('password2') || '').toString();
+
+    if (!display_name) { alert('請輸入暱稱'); return; }
+    if (!email || !password) { alert('請輸入 Email 和密碼'); return; }
+    if (password !== password2) { alert('兩次密碼輸入不一致'); return; }
+
+    const res = await fetchPost('register', { display_name, email, password });
+    if (res.success) {
+        currentUser = res.data || currentUser;
+        showDashboard();
+    } else {
+        alert(res.message || '註冊失敗');
+    }
+}
+
+async function logout() {
+    if (isDemoMode) {
+        currentUser = null;
+        isDemoMode = false;
+        showLogin();
+        return;
+    }
+
+    const res = await fetchPost('logout', {});
+    if (res.success) {
+        currentUser = null;
+        showLogin();
+    } else {
+        alert(res.message || '登出失敗');
+    }
+}
+
+// Demo login (保留原本功能)
+function demoLogin() {
+    isDemoMode = true;
+    currentUser = {
+        id: 999,
+        display_name: 'Demo User',
+        email: 'demo@fitconnect.dev',
+        height: 170,
+        weight: 65
+    };
+    showDashboard();
+}
+
+// --- UI setup ---
+function setupForms() {
+    const loginForm = document.getElementById('login-form');
+    const regForm = document.getElementById('register-form');
+    const addForm = document.getElementById('add-workout-form');
+
+    if (loginForm) loginForm.addEventListener('submit', handleLogin);
+    if (regForm) regForm.addEventListener('submit', handleRegister);
+    if (addForm) addForm.addEventListener('submit', handleAddWorkout);
+
+    // input change for calories
+    const typeEl = document.getElementById('input-type');
+    const minEl = document.getElementById('input-minutes');
+    if (typeEl) typeEl.addEventListener('change', calculateCalories);
+    if (minEl) minEl.addEventListener('input', calculateCalories);
+
+    // Global time buttons
+    document.querySelectorAll('.g-time-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const text = btn.textContent;
+            if (text.includes('1天')) setGlobalRange('1d');
+            else if (text.includes('1周')) setGlobalRange('1wk');
+            else if (text.includes('1月')) setGlobalRange('1m');
+            else setGlobalRange('3m');
+        });
+    });
+}
+
+// --- Profile ---
+function updateProfileUI() {
+    const nameEl = document.getElementById('user-display-name');
+    const statsEl = document.getElementById('profile-stats');
+
+    if (nameEl) nameEl.textContent = currentUser?.display_name || 'User';
+
+    // 顯示身高體重
+    if (statsEl) {
+        const h = currentUser?.height ?? '—';
+        const w = currentUser?.weight ?? '—';
+        statsEl.textContent = `身高：${h} cm｜體重：${w} kg`;
+    }
+
     // 載入頭像
     const saved = localStorage.getItem(`avatar_${currentUser.id}`);
     const defaultAvatar = 'public/image/1.png';
     const avatarImg = document.getElementById('current-avatar');
-
-    // Validate saved path, fallback to default
-    if (saved && saved.includes('public/image/')) {
-        avatarImg.src = saved;
-    } else {
-        avatarImg.src = defaultAvatar;
-    }
-
-    // 初始載入圖表
-    setGlobalRange('1d');
-}
-
-function demoLogin() {
-    isDemoMode = true;
-    currentUser = { id: 999, display_name: 'Demo Hero', email: 'demo@fit.com' };
-    showDashboard();
-}
-
-async function logout() {
-    if (!isDemoMode) await fetchPost('logout', {});
-    location.reload();
-}
-
-// --- 表單/互動 ---
-function setupForms() {
-    document.getElementById('login-form').onsubmit = handleLogin;
-    document.getElementById('register-form').onsubmit = handleRegister;
-    document.getElementById('add-workout-form').onsubmit = handleAddWorkout;
-}
-
-function switchTab(tab) {
-    const loginFn = document.getElementById('login-form');
-    const regFn = document.getElementById('register-form');
-    if (tab === 'login') {
-        loginFn.classList.remove('hidden');
-        regFn.classList.add('hidden');
-    } else {
-        loginFn.classList.add('hidden');
-        regFn.classList.remove('hidden');
-    }
-}
-
-async function handleLogin(e) { e.preventDefault(); demoLogin(); } // 簡化 Demo
-async function handleRegister(e) { e.preventDefault(); demoLogin(); }
-
-async function handleAddWorkout(e) {
-    e.preventDefault();
-
-    // Check Profile
-    if (!currentUser || !currentUser.height || !currentUser.weight) {
-        alert('請先完善個人資料(身高、體重)才能新增紀錄！');
-        // Trigger edit
-        enableProfileEdit();
-        return;
-    }
-
-    const datePart = document.getElementById('input-date-part').value;
-    const timePart = document.getElementById('input-time-part').value;
-    const fullDate = `${datePart} ${timePart}:00`; // YYYY-MM-DD HH:mm:ss
-
-    const type = document.getElementById('input-type').value;
-    const minutes = document.getElementById('input-minutes').value;
-    const calories = document.getElementById('input-calories').value;
-
-    const payload = {
-        date: fullDate,
-        type, minutes, calories
-    };
-
-    if (isDemoMode) {
-        alert('Demo: 新增成功');
-        // loadAllCharts(); 
-        return;
-    }
-
-    const res = await fetch(`${API_URL}?action=add_workout`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-    });
-    const json = await res.json();
-    if (json.success) {
-        alert('新增成功');
-        location.reload();
-    } else {
-        alert('失敗: ' + json.message);
-    }
-}
-
-function calculateCalories() {
-    const type = document.getElementById('input-type').value;
-    const mins = parseInt(document.getElementById('input-minutes').value) || 0;
-
-    // MET values
-    const metTable = {
-        '跑步': 10,
-        '重訓': 4,
-        '腳踏車': 8,
-        '游泳': 6,
-        '瑜珈': 3,
-        '其他': 2
-    };
-    const met = metTable[type] || 2;
-
-    // Check if weight is set
-    const weight = (currentUser && currentUser.weight) ? parseFloat(currentUser.weight) : null;
-
-    if (!weight) {
-        document.getElementById('calorie-display-area').classList.add('hidden');
-        document.getElementById('input-calories').value = 0;
-        return;
-    }
-
-    // Formula: kcal = ((MET * 3.5 * weight) / 200) * time
-    const total = ((met * 3.5 * weight) / 200) * mins;
-
-    const finalVal = Math.round(total);
-
-    document.getElementById('calc-val').textContent = finalVal;
-    document.getElementById('input-calories').value = finalVal;
-    document.getElementById('calorie-display-area').classList.remove('hidden');
-}
-
-// --- 頭像與 Modal ---
-function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
-function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
-
-function saveName() {
-    const val = document.getElementById('new-display-name').value;
-    document.getElementById('user-display-name').textContent = val;
-    closeModal('nameModal');
-}
-
-function generateAvatarGrid() {
-    const grid = document.getElementById('avatar-grid');
-    grid.innerHTML = '';
-
-    // 使用 1.png 到 11.png
-    const avatarCount = 11;
-    for (let i = 1; i <= avatarCount; i++) {
-        const imgPath = `public/image/${i}.png`;
-        const img = document.createElement('img');
-        img.src = imgPath;
-        img.alt = `Avatar ${i}`;
-        img.style.width = '60px';
-        img.style.height = '60px';
-        img.style.borderRadius = '50%';
-        img.style.cursor = 'pointer';
-        img.style.objectFit = 'cover';
-        img.style.border = '2px solid #eee';
-
-        img.onclick = () => {
-            document.getElementById('current-avatar').src = imgPath;
-            // 簡單起見，這裡不存 LocalStorage，實際專案應該要存
-            closeModal('avatarModal');
-        };
-        grid.appendChild(img);
-    }
-}
-
-function setupCoachInteraction() {
-    const wrapper = document.querySelector('.coach-img-wrapper');
-    const img = document.querySelector('.coach-full-img');
-
-    if (!wrapper || !img) return;
-
-    wrapper.addEventListener('mouseenter', () => {
-        img.src = 'public/image/tinin2.png';
-    });
-
-    wrapper.addEventListener('mouseleave', () => {
-        img.src = 'public/image/tinin.png';
-    });
-}
-
-function toggleChat() {
-    const win = document.getElementById('chat-window');
-    if (win.style.opacity === '0' || win.style.opacity === '') {
-        win.style.opacity = '1';
-        win.style.pointerEvents = 'auto';
-        win.style.transform = 'translateY(0)';
-    } else {
-        win.style.opacity = '0';
-        win.style.pointerEvents = 'none';
-        win.style.transform = 'translateY(20px)';
-    }
-}
-
-// --- 全域圖表邏輯 (核心) ---
-
-function setGlobalRange(range) {
-    globalTimeRange = range;
-    // Update Buttons
-    document.querySelectorAll('.g-time-btn').forEach(b => {
-        if (b.textContent.includes(range === '1d' ? '1天' : range === '1wk' ? '1周' : range === '1m' ? '1月' : '3月'))
-            b.classList.add('active');
-        else b.classList.remove('active');
-    });
-
-    loadAllCharts();
-}
-
-// --- 全域圖表邏輯 ---
-
-let chartCache = {
-    barLabels: [], barData: [],
-    lineLabels: [], lineData: [],
-    pieLabels: [], pieData: []
-};
-
-function setGlobalRange(range) {
-    globalTimeRange = range;
-    document.querySelectorAll('.g-time-btn').forEach(b => {
-        if (b.textContent.includes(range === '1d' ? '1天' : range === '1wk' ? '1周' : range === '1m' ? '1月' : '3月'))
-            b.classList.add('active');
-        else b.classList.remove('active');
-    });
-
-    generateChartData();
-    updateCharts();
-}
-
-function generateChartData() {
-    let labels = [];
-    let barData = [];
-    let lineData = [];
-    let pieData = [30, 20, 15, 10, 25];
-
-    if (globalTimeRange === '1d') {
-        for (let i = 0; i < 24; i += 3) labels.push(`${i}:00`);
-        barData = getDataPoints(8, 30);
-        lineData = getDataPoints(8, 200);
-        pieData = [30, 20, 15, 10, 25];
-    } else if (globalTimeRange === '1wk') {
-        labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-        barData = getDataPoints(7, 90);
-        lineData = getDataPoints(7, 600);
-        pieData = [100, 80, 60, 40, 90];
-    } else if (globalTimeRange === '1m') {
-        for (let i = 1; i <= 30; i += 5) labels.push(`${i}日`);
-        barData = getDataPoints(6, 120);
-        lineData = getDataPoints(6, 800);
-        pieData = [200, 150, 100, 50, 120];
-    } else {
-        labels = ['一月', '二月', '三月'];
-        barData = getDataPoints(3, 2000);
-        lineData = getDataPoints(3, 15000);
-        pieData = [500, 300, 400, 200, 600];
-    }
-
-    chartCache.barLabels = labels;
-    chartCache.barData = barData;
-    chartCache.lineLabels = labels;
-    chartCache.lineData = lineData;
-    chartCache.pieData = pieData;
-    chartCache.pieLabels = ['跑步', '重訓', '腳踏車', '游泳', '瑜珈'];
-
-    if (!barInstance) initCharts();
-}
-
-function getDataPoints(count, maxVal) {
-    return Array.from({ length: count }, () => Math.floor(Math.random() * maxVal));
-}
-
-function loadAllCharts() {
-    generateChartData();
-    updateCharts();
-    renderLeaderboard(); // 確保每次也更新排行榜 (模擬)
-}
-
-let barInstance = null;
-let lineInstance = null;
-let pieInstance = null;
-
-function initCharts() {
-    // Bar
-    const ctxBar = document.getElementById('chart-bar-time');
-    barInstance = new Chart(ctxBar, {
-        type: 'bar',
-        data: { labels: chartCache.barLabels, datasets: [{ label: '運動時間 (分鐘)', data: chartCache.barData, backgroundColor: '#3742fa', borderRadius: 5 }] },
-        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
-    });
-
-    // Line
-    const ctxLine = document.getElementById('chart-line-calories');
-    lineInstance = new Chart(ctxLine, {
-        type: 'line',
-        data: { labels: chartCache.lineLabels, datasets: [{ label: '消耗熱量 (kcal)', data: chartCache.lineData, borderColor: '#ff4757', backgroundColor: 'rgba(255, 71, 87, 0.1)', fill: true, tension: 0.4 }] },
-        options: { responsive: true, maintainAspectRatio: false }
-    });
-
-    // Pie
-    const ctxPie = document.getElementById('chart-pie-types');
-    pieInstance = new Chart(ctxPie, {
-        type: 'doughnut',
-        data: {
-            labels: chartCache.pieLabels,
-            datasets: [{ data: chartCache.pieData, backgroundColor: ['#ff4757', '#3742fa', '#ffa502', '#2ed573', '#1e90ff'], borderWidth: 0, hoverOffset: 15 }]
-        },
-        options: {
-            responsive: true, maintainAspectRatio: false, cutout: '70%',
-            plugins: { legend: { display: false } },
-            onHover: (event, elements) => {
-                const icon = document.getElementById('pie-center-icon');
-                const text = document.getElementById('pie-center-text');
-                if (elements.length > 0) {
-                    const idx = elements[0].index;
-                    icon.textContent = SPORT_ICONS[chartCache.pieLabels[idx]] || '🏅';
-                    text.textContent = chartCache.pieLabels[idx];
-                } else {
-                    icon.textContent = '🏆';
-                    text.textContent = '總覽';
-                }
-            }
-        }
-    });
-}
-
-function updateCharts() {
-    if (!barInstance || !lineInstance || !pieInstance) return;
-    barInstance.data.labels = chartCache.barLabels;
-    lineInstance.data.labels = chartCache.lineLabels;
-    barInstance.data.datasets[0].data = chartCache.barData;
-    lineInstance.data.datasets[0].data = chartCache.lineData;
-    pieInstance.data.datasets[0].data = chartCache.pieData;
-    barInstance.update();
-    lineInstance.update();
-    pieInstance.update();
-}
-
-// --- Avatar Logic (Fade) ---
-let currentAvatarId = 1;
-
-function changeAvatar(dir) {
-    const img = document.getElementById('current-avatar');
-    if (!img) return;
-
-    // Fade Out
-    img.classList.add('fade-out');
-
-    setTimeout(() => {
-        currentAvatarId += dir;
-        if (currentAvatarId < 1) currentAvatarId = 11;
-        if (currentAvatarId > 11) currentAvatarId = 1;
-
-        img.src = `public/image/${currentAvatarId}.png`;
-
-        // Swap to Fade In
-        img.classList.remove('fade-out');
-        img.classList.add('fade-in');
-
-        // Cleanup
-        setTimeout(() => {
-            img.classList.remove('fade-in');
-        }, 300);
-    }, 300);
-}
-
-// --- Inline Profile Edit ---
-function enableProfileEdit() {
-    const nameDisplay = document.getElementById('user-display-name');
-    const statsDisplay = document.getElementById('profile-stats');
-    const parent = nameDisplay.parentElement;
-
-    if (document.querySelector('.edit-profile-container')) return;
-
-    const currentName = currentUser.display_name || '';
-    const currentHeight = currentUser.height || '';
-    const currentWeight = currentUser.weight || '';
-
-    // Hide display
-    nameDisplay.style.display = 'none';
-    statsDisplay.style.display = 'none';
-
-    // Create Edit Container
-    const container = document.createElement('div');
-    container.className = 'edit-profile-container';
-    container.innerHTML = `
-        <div style="margin-bottom: 5px;"><input type="text" id="edit-name" class="form-control" value="${currentName}" placeholder="暱稱"></div>
-        <div style="display: flex; gap: 10px; margin-bottom: 5px;">
-            <input type="number" id="edit-height" class="form-control" value="${currentHeight}" placeholder="身高 (cm)">
-            <input type="number" id="edit-weight" class="form-control" value="${currentWeight}" placeholder="體重 (kg)">
-        </div>
-        <button class="btn-primary" style="padding: 5px 15px; font-size: 0.9rem;" onclick="saveProfile()">儲存</button>
-        <button class="btn-primary" style="padding: 5px 15px; font-size: 0.9rem; background: #999;" onclick="cancelProfileEdit()">取消</button>
-    `;
-
-    parent.appendChild(container);
-}
-
-function cancelProfileEdit() {
-    const nameDisplay = document.getElementById('user-display-name');
-    const statsDisplay = document.getElementById('profile-stats');
-    nameDisplay.style.display = 'block';
-    statsDisplay.style.display = 'block';
-    const c = document.querySelector('.edit-profile-container');
-    if (c) c.remove();
+    if (avatarImg) avatarImg.src = saved || defaultAvatar;
 }
 
 async function saveProfile() {
@@ -508,23 +223,317 @@ async function saveProfile() {
             alert(json.message || '更新失敗');
         }
     } catch (e) {
-        console.error(e);
         alert('連線錯誤');
     }
 }
 
-function updateProfileUI() {
-    document.getElementById('user-display-name').textContent = currentUser.display_name;
+// --- Add workout ---
+async function handleAddWorkout(e) {
+    e.preventDefault();
 
-    const h = currentUser.height ? `${currentUser.height}cm` : '';
-    const w = currentUser.weight ? `${currentUser.weight}kg` : '';
-    let text = '';
-    if (h && w) text = `${h} / ${w}`;
-    else if (h) text = h;
-    else if (w) text = w;
-    else text = '完善個人資料以計算熱量';
+    const datePart = document.getElementById('input-date').value;
+    const timePart = document.getElementById('input-time').value;
+    const type = document.getElementById('input-type').value;
+    const minutes = parseInt(document.getElementById('input-minutes').value || '0', 10);
+    const calories = parseInt(document.getElementById('input-calories').value || '0', 10);
 
-    document.getElementById('profile-stats').textContent = text;
+    if (!datePart || !timePart) { alert('請選擇日期/時間'); return; }
+    if (!type) { alert('請選擇運動種類'); return; }
+    if (!minutes || minutes <= 0) { alert('請輸入運動時長'); return; }
+
+    const fullDate = `${datePart} ${timePart}:00`;
+
+    const payload = {
+        date: fullDate,
+        type, minutes, calories
+    };
+
+    if (isDemoMode) {
+        alert('Demo: 新增成功');
+        // loadAllCharts(); 
+        return;
+    }
+
+    const res = await fetch(`${API_URL}?action=add_workout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+    const json = await res.json();
+    if (json.success) {
+        alert('新增成功');
+        location.reload();
+    } else {
+        alert('失敗: ' + json.message);
+    }
+}
+
+function calculateCalories() {
+    const type = document.getElementById('input-type').value;
+    const mins = parseInt(document.getElementById('input-minutes').value || '0', 10);
+
+    // 簡易估算（保留原本 UI 邏輯）
+    const metMap = {
+        '跑步': 10,
+        '重訓': 6,
+        '腳踏車': 8,
+        '游泳': 9,
+        '瑜珈': 3,
+        '其他': 5
+    };
+
+    const w = parseFloat(currentUser?.weight || 65);
+    const met = metMap[type] || 5;
+
+    // kcal/min ≈ MET * 3.5 * weight(kg) / 200
+    const kcal = Math.round((met * 3.5 * w / 200) * mins);
+
+    const out = document.getElementById('input-calories');
+    if (out) out.value = isFinite(kcal) ? kcal : 0;
+}
+
+// --- Charts (Global) ---
+let chartCache = {
+    barLabels: [], barData: [],
+    lineLabels: [], lineData: [],
+    pieLabels: [], pieData: []
+};
+
+function setGlobalRange(range) {
+    globalTimeRange = range;
+    document.querySelectorAll('.g-time-btn').forEach(b => {
+        if (b.textContent.includes(range === '1d' ? '1天' : range === '1wk' ? '1周' : range === '1m' ? '1月' : '3月'))
+            b.classList.add('active');
+        else b.classList.remove('active');
+    });
+
+    loadAllCharts();
+}
+
+function generateChartData() {
+    let labels = [];
+    let barData = [];
+    let lineData = [];
+    let pieData = [30, 20, 15, 10, 25];
+
+    if (globalTimeRange === '1d') {
+        labels = ['00:00', '03:00', '06:00', '09:00', '12:00', '15:00', '18:00', '21:00'];
+        barData = [15, 10, 0, 20, 30, 25, 15, 5];
+        lineData = [200, 150, 100, 250, 300, 280, 220, 180];
+        pieData = [40, 10, 15, 20, 15];
+    } else if (globalTimeRange === '1wk') {
+        labels = ['一', '二', '三', '四', '五', '六', '日'];
+        barData = getDataPoints(7, 120);
+        lineData = getDataPoints(7, 1200);
+        pieData = [20, 25, 10, 15, 30];
+    } else if (globalTimeRange === '1m') {
+        labels = ['第1週', '第2週', '第3週', '第4週'];
+        barData = [500, 600, 450, 700];
+        lineData = [6000, 7200, 5000, 8000];
+        pieData = [30, 20, 15, 10, 25];
+    } else {
+        labels = ['一月', '二月', '三月'];
+        barData = getDataPoints(3, 2000);
+        lineData = getDataPoints(3, 15000);
+        pieData = [500, 300, 400, 200, 600];
+    }
+
+    chartCache.barLabels = labels;
+    chartCache.barData = barData;
+    chartCache.lineLabels = labels;
+    chartCache.lineData = lineData;
+    chartCache.pieData = pieData;
+    chartCache.pieLabels = ['跑步', '重訓', '腳踏車', '游泳', '瑜珈'];
+
+    if (!barInstance) initCharts();
+}
+
+function getDataPoints(count, maxVal) {
+    return Array.from({ length: count }, () => Math.floor(Math.random() * maxVal));
+}
+
+async function loadAllCharts() {
+    // Demo 模式：維持原本的隨機資料行為
+    if (isDemoMode) {
+        generateChartData();
+        if (!barInstance) initCharts();
+        updateCharts();
+        renderLeaderboard();
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_URL}?action=get_dashboard_data&range=${encodeURIComponent(globalTimeRange)}`, {
+            method: 'GET',
+            credentials: 'same-origin'
+        });
+        const json = await res.json();
+
+        if (json.success && json.data) {
+            const d = json.data;
+
+            // Bar: minutes
+            chartCache.barLabels = (d.bar && d.bar.labels) ? d.bar.labels : [];
+            chartCache.barData = (d.bar && d.bar.data) ? d.bar.data : [];
+
+            // Line: calories
+            chartCache.lineLabels = (d.line && d.line.labels) ? d.line.labels : [];
+            chartCache.lineData = (d.line && d.line.data) ? d.line.data : [];
+
+            // Pie: calories by type
+            chartCache.pieLabels = (d.pie && d.pie.labels) ? d.pie.labels : ['跑步', '重訓', '腳踏車', '游泳', '瑜珈', '其他'];
+            chartCache.pieData = (d.pie && d.pie.data) ? d.pie.data : [0, 0, 0, 0, 0, 0];
+
+            if (!barInstance) initCharts();
+            updateCharts();
+        } else {
+            // 後端回傳失敗：保留原本行為（隨機資料）作為備援
+            console.warn('get_dashboard_data failed:', json);
+            generateChartData();
+            if (!barInstance) initCharts();
+            updateCharts();
+        }
+    } catch (e) {
+        console.error('loadAllCharts error:', e);
+        // 連線失敗：保留原本行為作為備援
+        generateChartData();
+        if (!barInstance) initCharts();
+        updateCharts();
+    }
+
+    // 排行榜（仍走後端，若失敗會顯示「載入失敗」）
+    renderLeaderboard();
+}
+
+let barInstance = null;
+let lineInstance = null;
+let pieInstance = null;
+
+function initCharts() {
+    // Bar
+    const ctxBar = document.getElementById('chart-bar-time');
+    barInstance = new Chart(ctxBar, {
+        type: 'bar',
+        data: { labels: chartCache.barLabels, datasets: [{ label: '總運動時間 (分鐘)', data: chartCache.barData, backgroundColor: '#3742fa', borderRadius: 5 }] },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+    });
+
+    // Line
+    const ctxLine = document.getElementById('chart-line-calories');
+    lineInstance = new Chart(ctxLine, {
+        type: 'line',
+        data: { labels: chartCache.lineLabels, datasets: [{ label: '總消耗 (kcal)', data: chartCache.lineData, borderColor: '#ff4757', tension: 0.4, fill: false }] },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+    });
+
+    // Pie
+    const ctxPie = document.getElementById('chart-pie-types');
+    pieInstance = new Chart(ctxPie, {
+        type: 'doughnut',
+        data: {
+            labels: chartCache.pieLabels,
+            datasets: [{
+                data: chartCache.pieData, backgroundColor: [
+                    '#ff4757', '#3742fa', '#ffa502', '#2ed573', '#1e90ff'
+                ], borderWidth: 0, hoverOffset: 15
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false, cutout: '70%',
+            plugins: { legend: { display: false } },
+            onHover: (event, elements) => {
+                const icon = document.getElementById('pie-center-icon');
+                const text = document.getElementById('pie-center-text');
+                if (!icon || !text) return;
+
+                if (elements.length > 0) {
+                    const idx = elements[0].index;
+                    icon.textContent = SPORT_ICONS[chartCache.pieLabels[idx]] || '🏅';
+                    text.textContent = chartCache.pieLabels[idx];
+                } else {
+                    icon.textContent = '🏅';
+                    text.textContent = '運動分布';
+                }
+            }
+        }
+    });
+}
+
+function updateCharts() {
+    if (!barInstance || !lineInstance || !pieInstance) return;
+    barInstance.data.labels = chartCache.barLabels;
+    lineInstance.data.labels = chartCache.lineLabels;
+    barInstance.data.datasets[0].data = chartCache.barData;
+    lineInstance.data.datasets[0].data = chartCache.lineData;
+    pieInstance.data.labels = chartCache.pieLabels;
+    pieInstance.data.datasets[0].data = chartCache.pieData;
+    barInstance.update();
+    lineInstance.update();
+    pieInstance.update();
+}
+
+// --- Avatar Logic (Fade) ---
+let currentAvatarId = 1;
+
+function changeAvatar(dir) {
+    const img = document.getElementById('current-avatar');
+    if (!img) return;
+
+    img.classList.add('fade-out');
+
+    setTimeout(() => {
+        currentAvatarId += dir;
+        if (currentAvatarId < 1) currentAvatarId = 5;
+        if (currentAvatarId > 5) currentAvatarId = 1;
+
+        const newSrc = `public/image/${currentAvatarId}.png`;
+        img.src = newSrc;
+        img.classList.remove('fade-out');
+        img.classList.add('fade-in');
+
+        // Save
+        if (currentUser?.id) localStorage.setItem(`avatar_${currentUser.id}`, newSrc);
+
+        // Cleanup
+        setTimeout(() => {
+            img.classList.remove('fade-in');
+        }, 300);
+    }, 300);
+}
+
+// --- Inline Profile Edit ---
+function enableProfileEdit() {
+    const nameDisplay = document.getElementById('user-display-name');
+    const statsDisplay = document.getElementById('profile-stats');
+    const parent = nameDisplay.parentElement;
+
+    if (document.querySelector('.profile-edit')) return;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'profile-edit';
+
+    wrap.innerHTML = `
+        <input id="edit-name" placeholder="暱稱" value="${currentUser?.display_name || ''}" />
+        <input id="edit-height" placeholder="身高(cm)" type="number" value="${currentUser?.height || ''}" />
+        <input id="edit-weight" placeholder="體重(kg)" type="number" value="${currentUser?.weight || ''}" />
+        <div class="profile-edit-actions">
+            <button class="btn btn-primary" onclick="saveProfile()">儲存</button>
+            <button class="btn" onclick="cancelProfileEdit()">取消</button>
+        </div>
+    `;
+
+    nameDisplay.style.display = 'none';
+    statsDisplay.style.display = 'none';
+    parent.appendChild(wrap);
+}
+
+function cancelProfileEdit() {
+    const nameDisplay = document.getElementById('user-display-name');
+    const statsDisplay = document.getElementById('profile-stats');
+    const edit = document.querySelector('.profile-edit');
+    if (edit) edit.remove();
+    nameDisplay.style.display = 'block';
+    statsDisplay.style.display = 'block';
 }
 
 // --- Leaderboard ---
@@ -570,4 +579,22 @@ async function renderLeaderboard() {
     }
 }
 
-async function fetchPost(a, d) { return { success: true }; } // Mock for demo
+async function fetchPost(action, data) {
+    // Demo 模式：維持原本假資料流程
+    if (typeof isDemoMode !== 'undefined' && isDemoMode) {
+        return { success: true, data: null };
+    }
+
+    try {
+        const res = await fetch(`${API_URL}?action=${encodeURIComponent(action)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify(data || {})
+        });
+        return await res.json();
+    } catch (e) {
+        console.error('fetchPost error:', e);
+        return { success: false, message: '連線失敗' };
+    }
+}
