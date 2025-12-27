@@ -41,226 +41,13 @@ function sendResponse(array $data): void {
     exit;
 }
 
-function requireLogin(): int {
-    if (!isset($_SESSION['user_id'])) {
-        sendResponse(['success' => false, 'message' => '尚未登入']);
-    }
-    return (int)$_SESSION['user_id'];
+function normalizeRange(?string $range): string {
+    $range = $range ?: '1d';
+    return in_array($range, ['1d', '1wk', '1m', '3m'], true) ? $range : '1d';
 }
 
-// 讀取輸入
-$input  = getJsonInput();
-$action = $input['action'] ?? ($_GET['action'] ?? null);
-
-// --- 公開動作（不需登入） ---
-
-if ($action === 'register') {
-    global $pdo, $DB_DRIVER;
-
-    $email = trim((string)($input['email'] ?? ''));
-    $pass  = (string)($input['password'] ?? '');
-    $name  = trim((string)($input['display_name'] ?? 'User'));
-
-    if ($email === '' || $pass === '') {
-        sendResponse(['success' => false, 'message' => '請輸入 Email 和密碼']);
-    }
-
-    // 檢查 email 是否已存在
-    $stmt = $pdo->prepare("SELECT id FROM users WHERE email = :email LIMIT 1");
-    $stmt->execute([':email' => $email]);
-    if ($stmt->fetch()) {
-        sendResponse(['success' => false, 'message' => '此 Email 已被註冊']);
-    }
-
-    $hash = password_hash($pass, PASSWORD_DEFAULT);
-
-    try {
-        if ($DB_DRIVER === 'pgsql') {
-            $stmt = $pdo->prepare("
-                INSERT INTO users (email, password_hash, display_name)
-                VALUES (:email, :hash, :name)
-                RETURNING id
-            ");
-            $stmt->execute([':email' => $email, ':hash' => $hash, ':name' => $name]);
-            $userId = (int)$stmt->fetchColumn();
-        } else {
-            $stmt = $pdo->prepare("
-                INSERT INTO users (email, password_hash, display_name)
-                VALUES (:email, :hash, :name)
-            ");
-            $stmt->execute([':email' => $email, ':hash' => $hash, ':name' => $name]);
-            $userId = (int)$pdo->lastInsertId();
-        }
-    } catch (PDOException $e) {
-        sendResponse(['success' => false, 'message' => '註冊失敗', 'error' => $e->getMessage()]);
-    }
-
-    // 自動登入
-    $_SESSION['user_id'] = $userId;
-
-    // 回傳使用者資訊（main.js 需要 id 來存 avatar localStorage key）
-    sendResponse([
-        'success' => true,
-        'data' => [
-            'id' => $userId,
-            'display_name' => $name,
-            'email' => $email,
-            'height' => null,
-            'weight' => null,
-        ]
-    ]);
-
-} elseif ($action === 'login') {
-    global $pdo;
-
-    $email = trim((string)($input['email'] ?? ''));
-    $pass  = (string)($input['password'] ?? '');
-
-    if ($email === '' || $pass === '') {
-        sendResponse(['success' => false, 'message' => '請輸入 Email 和密碼']);
-    }
-
-    $stmt = $pdo->prepare("
-        SELECT id, password_hash, display_name, email, height, weight, line_user_id
-        FROM users
-        WHERE email = :email
-        LIMIT 1
-    ");
-    $stmt->execute([':email' => $email]);
-    $row = $stmt->fetch();
-
-    if (!$row || !password_verify($pass, (string)$row['password_hash'])) {
-        sendResponse(['success' => false, 'message' => 'Email 或密碼錯誤']);
-    }
-
-    $_SESSION['user_id'] = (int)$row['id'];
-
-    sendResponse([
-        'success' => true,
-        'data' => [
-            'id' => (int)$row['id'],
-            'display_name' => $row['display_name'],
-            'email' => $row['email'],
-            'height' => $row['height'],
-            'weight' => $row['weight'],
-            'line_user_id' => $row['line_user_id'] ?? null,
-        ]
-    ]);
-
-} elseif ($action === 'logout') {
-    session_destroy();
-    sendResponse(['success' => true]);
-
-} elseif ($action === 'init') {
-    // 讓你可以用 /submit.php?action=init 或 /update_db.php?action=init 來確認建表
-    // 建表是在 config.php 做的；這裡只是回傳 OK，避免你以為沒建
-    sendResponse(['success' => true, 'message' => 'tables ready']);
-}
-
-// --- 之後的動作都需要登入 ---
-$userId = requireLogin();
-
-// --- 需登入後的動作 ---
-
-if ($action === 'get_user_info') {
-    global $pdo;
-
-    $stmt = $pdo->prepare("
-        SELECT id, display_name, email, line_user_id, height, weight
-        FROM users
-        WHERE id = :id
-        LIMIT 1
-    ");
-    $stmt->execute([':id' => $userId]);
-    $data = $stmt->fetch();
-
-    sendResponse(['success' => true, 'data' => $data]);
-
-} elseif ($action === 'update_profile') {
-    global $pdo;
-
-    $name   = trim((string)($input['display_name'] ?? 'User'));
-    $height = ($input['height'] ?? null);
-    $weight = ($input['weight'] ?? null);
-
-    $heightVal = ($height === '' || $height === null) ? null : (float)$height;
-    $weightVal = ($weight === '' || $weight === null) ? null : (float)$weight;
-
-    $stmt = $pdo->prepare("
-        UPDATE users
-        SET display_name = :name,
-            height       = :hei,
-            weight       = :wei
-        WHERE id = :id
-    ");
-    $stmt->execute([
-        ':name' => $name,
-        ':hei'  => $heightVal,
-        ':wei'  => $weightVal,
-        ':id'   => $userId,
-    ]);
-
-    sendResponse(['success' => true]);
-
-} elseif ($action === 'add_workout') {
-    global $pdo, $DB_DRIVER;
-
-    // 新增一筆運動紀錄
-    $date     = (string)($input['date'] ?? date('Y-m-d H:i:s'));
-    $type     = trim((string)($input['type'] ?? '其他'));
-    $minutes  = (int)($input['minutes'] ?? 0);
-    $calories = (int)($input['calories'] ?? 0);
-
-    if ($minutes < 0) $minutes = 0;
-    if ($calories < 0) $calories = 0;
-    if ($type === '') $type = '其他';
-
-    $stmt = $pdo->prepare("
-        INSERT INTO workouts (user_id, date, type, minutes, calories)
-        VALUES (:uid, :date, :type, :minutes, :calories)
-    ");
-
-    if ($stmt->execute([
-        ':uid'      => $userId,
-        ':date'     => $date,
-        ':type'     => $type,
-        ':minutes'  => $minutes,
-        ':calories' => $calories,
-    ])) {
-        // 更新累積總消耗卡路里 (user_totals)
-        try {
-            if ($DB_DRIVER === 'pgsql') {
-                $stmtTotals = $pdo->prepare("
-                    INSERT INTO user_totals (user_id, total_calories)
-                    VALUES (:uid, :calories)
-                    ON CONFLICT (user_id)
-                    DO UPDATE SET total_calories = user_totals.total_calories + EXCLUDED.total_calories
-                ");
-            } else {
-                $stmtTotals = $pdo->prepare("
-                    INSERT INTO user_totals (user_id, total_calories)
-                    VALUES (:uid, :calories)
-                    ON DUPLICATE KEY UPDATE total_calories = total_calories + VALUES(total_calories)
-                ");
-            }
-            $stmtTotals->execute([
-                ':uid'      => $userId,
-                ':calories' => $calories,
-            ]);
-        } catch (PDOException $e) {
-            // totals 更新失敗不影響主流程
-        }
-
-        sendResponse(['success' => true]);
-    } else {
-        sendResponse(['success' => false, 'message' => '新增失敗']);
-    }
-
-} elseif ($action === 'get_leaderboard') {
-    global $pdo, $DB_DRIVER;
-
-    // 最近 30 天運動總分鐘數前 10 名
-    if ($DB_DRIVER === 'pgsql') {
+function buildLeaderboard(PDO $pdo, string $driver): array {
+    if ($driver === 'pgsql') {
         $sql = "
             SELECT
                 u.display_name,
@@ -294,24 +81,14 @@ if ($action === 'get_user_info') {
         $row['total'] = (int)$row['total'];
     }
 
-    sendResponse(['success' => true, 'data' => $rows]);
+    return $rows;
+}
 
-} elseif ($action === 'get_dashboard_data') {
-    // ✅ main.js 會用這個 action 來更新：
-    // - Bar：分鐘數
-    // - Line：卡路里
-    // - Pie：各運動種類卡路里分佈
-    global $pdo, $DB_DRIVER;
+function buildDashboardData(PDO $pdo, int $userId, string $driver, string $range): array {
+    $range = normalizeRange($range);
 
-    $range = (string)($_GET['range'] ?? '1d');
-    $range = in_array($range, ['1d', '1wk', '1m', '3m'], true) ? $range : '1d';
-
-    // 依 range 決定查詢區間與分組粒度
-    // 1d：用 3 小時一格（00-03, 03-06...）
-    // 1wk/1m/3m：用「日期」一格
-    if ($DB_DRIVER === 'pgsql') {
+    if ($driver === 'pgsql') {
         if ($range === '1d') {
-            // 以 NOW() 往回 24 小時
             $sqlBarLine = "
                 WITH bins AS (
                     SELECT generate_series(0, 7) AS b
@@ -506,42 +283,276 @@ if ($action === 'get_user_info') {
         $pieData[] = $pieMap[$lab] ?? 0;
     }
 
+    return [
+        'bar' => ['labels' => $labels, 'data' => $bar],
+        'line' => ['labels' => $labels, 'data' => $line],
+        'pie' => ['labels' => $fixedLabels, 'data' => $pieData],
+    ];
+}
+
+function requireLogin(): int {
+    if (!isset($_SESSION['user_id'])) {
+        sendResponse(['success' => false, 'message' => '尚未登入']);
+    }
+    return (int)$_SESSION['user_id'];
+}
+
+// 讀取輸入
+$input  = getJsonInput();
+$action = $input['action'] ?? ($_GET['action'] ?? null);
+
+// --- 公開動作（不需登入） ---
+
+if ($action === 'register') {
+    global $pdo;
+
+    $email = trim((string)($input['email'] ?? ''));
+    $pass  = (string)($input['password'] ?? '');
+    $name  = trim((string)($input['display_name'] ?? 'User'));
+
+    if ($email === '' || $pass === '') {
+        sendResponse(['success' => false, 'message' => '請輸入 Email 和密碼']);
+    }
+
+    // 檢查 email 是否已存在
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE email = :email LIMIT 1");
+    $stmt->execute([':email' => $email]);
+    if ($stmt->fetch()) {
+        sendResponse(['success' => false, 'message' => '此 Email 已被註冊']);
+    }
+
+    $hash = password_hash($pass, PASSWORD_DEFAULT);
+
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO users (email, password_hash, display_name)
+            VALUES (:email, :hash, :name)
+            RETURNING id
+        ");
+        $stmt->execute([':email' => $email, ':hash' => $hash, ':name' => $name]);
+        $userId = (int)$stmt->fetchColumn();
+    } catch (PDOException $e) {
+        sendResponse(['success' => false, 'message' => '註冊失敗', 'error' => $e->getMessage()]);
+    }
+
+    // 自動登入
+    $_SESSION['user_id'] = $userId;
+
+    // 回傳使用者資訊（main.js 需要 id 來存 avatar localStorage key）
     sendResponse([
         'success' => true,
         'data' => [
-            'bar' => ['labels' => $labels, 'data' => $bar],
-            'line' => ['labels' => $labels, 'data' => $line],
-            'pie' => ['labels' => $fixedLabels, 'data' => $pieData],
+            'id' => $userId,
+            'display_name' => $name,
+            'email' => $email,
+            'height' => null,
+            'weight' => null,
         ]
+    ]);
+
+} elseif ($action === 'login') {
+    global $pdo;
+
+    $email = trim((string)($input['email'] ?? ''));
+    $pass  = (string)($input['password'] ?? '');
+
+    if ($email === '' || $pass === '') {
+        sendResponse(['success' => false, 'message' => '請輸入 Email 和密碼']);
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT id, password_hash, display_name, email, height, weight, line_user_id
+        FROM users
+        WHERE email = :email
+        LIMIT 1
+    ");
+    $stmt->execute([':email' => $email]);
+    $row = $stmt->fetch();
+
+    if (!$row || !password_verify($pass, (string)$row['password_hash'])) {
+        sendResponse(['success' => false, 'message' => 'Email 或密碼錯誤']);
+    }
+
+    $_SESSION['user_id'] = (int)$row['id'];
+
+    sendResponse([
+        'success' => true,
+        'data' => [
+            'id' => (int)$row['id'],
+            'display_name' => $row['display_name'],
+            'email' => $row['email'],
+            'height' => $row['height'],
+            'weight' => $row['weight'],
+            'line_user_id' => $row['line_user_id'] ?? null,
+        ]
+    ]);
+
+} elseif ($action === 'logout') {
+    session_destroy();
+    sendResponse(['success' => true]);
+
+} elseif ($action === 'init') {
+    // 讓你可以用 /submit.php?action=init 或 /update_db.php?action=init 來確認建表
+    // 建表是在 config.php 做的；這裡只是回傳 OK，避免你以為沒建
+    sendResponse(['success' => true, 'message' => 'tables ready']);
+}
+
+// --- 之後的動作都需要登入 ---
+$userId = requireLogin();
+
+// --- 需登入後的動作 ---
+
+if ($action === 'get_user_info') {
+    global $pdo;
+
+    $stmt = $pdo->prepare("
+        SELECT id, display_name, email, line_user_id, height, weight
+        FROM users
+        WHERE id = :id
+        LIMIT 1
+    ");
+    $stmt->execute([':id' => $userId]);
+    $data = $stmt->fetch();
+
+    sendResponse(['success' => true, 'data' => $data]);
+
+} elseif ($action === 'update_profile') {
+    global $pdo;
+
+    $name   = trim((string)($input['display_name'] ?? 'User'));
+    $height = ($input['height'] ?? null);
+    $weight = ($input['weight'] ?? null);
+
+    $heightVal = ($height === '' || $height === null) ? null : (float)$height;
+    $weightVal = ($weight === '' || $weight === null) ? null : (float)$weight;
+
+    $stmt = $pdo->prepare("
+        UPDATE users
+        SET display_name = :name,
+            height       = :hei,
+            weight       = :wei
+        WHERE id = :id
+    ");
+    $stmt->execute([
+        ':name' => $name,
+        ':hei'  => $heightVal,
+        ':wei'  => $weightVal,
+        ':id'   => $userId,
+    ]);
+
+    sendResponse(['success' => true]);
+
+} elseif ($action === 'add_workout') {
+    global $pdo, $DB_DRIVER;
+
+    // 新增一筆運動紀錄
+    $dateRaw  = (string)($input['date'] ?? '');
+    $type     = trim((string)($input['type'] ?? '其他'));
+    $minutes  = (int)($input['minutes'] ?? 0);
+    $calories = (int)($input['calories'] ?? 0);
+    $range    = normalizeRange((string)($input['range'] ?? '1d'));
+
+    if ($dateRaw === '') {
+        sendResponse(['success' => false, 'message' => '缺少運動日期']);
+    }
+
+    try {
+        $dateObj = new DateTimeImmutable($dateRaw);
+        $date = $dateObj->format('Y-m-d H:i:sP');
+    } catch (Exception $e) {
+        sendResponse(['success' => false, 'message' => '日期格式錯誤']);
+    }
+
+    if ($minutes < 0) $minutes = 0;
+    if ($calories < 0) $calories = 0;
+    if ($type === '') $type = '其他';
+
+    $stmt = $pdo->prepare("
+        INSERT INTO workouts (user_id, date, type, minutes, calories)
+        VALUES (:uid, :date, :type, :minutes, :calories)
+    ");
+
+    if ($stmt->execute([
+        ':uid'      => $userId,
+        ':date'     => $date,
+        ':type'     => $type,
+        ':minutes'  => $minutes,
+        ':calories' => $calories,
+    ])) {
+        // 更新 user_totals 方便排行榜/分析快取
+        try {
+            if ($DB_DRIVER === 'pgsql') {
+                $stmtTotals = $pdo->prepare("
+                    INSERT INTO user_totals (user_id, total_calories)
+                    VALUES (:uid, :calories)
+                    ON CONFLICT (user_id)
+                    DO UPDATE SET total_calories = user_totals.total_calories + EXCLUDED.total_calories
+                ");
+            } else {
+                $stmtTotals = $pdo->prepare("
+                    INSERT INTO user_totals (user_id, total_calories)
+                    VALUES (:uid, :calories)
+                    ON DUPLICATE KEY UPDATE total_calories = total_calories + VALUES(total_calories)
+                ");
+            }
+
+            $stmtTotals->execute([
+                ':uid'      => $userId,
+                ':calories' => $calories,
+            ]);
+        } catch (PDOException $e) {
+            // totals 更新失敗不影響主流程
+        }
+
+        $dashboard = buildDashboardData($pdo, $userId, $DB_DRIVER, $range);
+        $leaderboard = buildLeaderboard($pdo, $DB_DRIVER);
+
+        sendResponse([
+            'success' => true,
+            'data' => [
+                'dashboard' => $dashboard,
+                'leaderboard' => $leaderboard,
+            ],
+        ]);
+    } else {
+        sendResponse(['success' => false, 'message' => '新增失敗']);
+    }
+
+} elseif ($action === 'get_leaderboard') {
+    global $pdo, $DB_DRIVER;
+
+    $rows = buildLeaderboard($pdo, $DB_DRIVER);
+    sendResponse(['success' => true, 'data' => $rows]);
+
+} elseif ($action === 'get_dashboard_data') {
+    // ✅ main.js 會用這個 action 來更新：
+    // - Bar：分鐘數
+    // - Line：卡路里
+    // - Pie：各運動種類卡路里分佈
+    global $pdo, $DB_DRIVER;
+
+    $range = normalizeRange((string)($_GET['range'] ?? '1d'));
+    $data = buildDashboardData($pdo, $userId, $DB_DRIVER, $range);
+
+    sendResponse([
+        'success' => true,
+        'data' => $data,
     ]);
 
 } elseif ($action === 'get_stats') {
     // 保留舊 action（如果你哪裡還在用），但修正 MySQL/PGSQL 相容
-    global $pdo, $DB_DRIVER;
+    global $pdo;
 
-    if ($DB_DRIVER === 'pgsql') {
-        $sql = "
-            SELECT
-                date::date AS date,
-                SUM(minutes) AS total
-            FROM workouts
-            WHERE user_id = :uid
-              AND date >= CURRENT_DATE - INTERVAL '7 days'
-            GROUP BY date::date
-            ORDER BY date::date ASC
-        ";
-    } else {
-        $sql = "
-            SELECT
-                DATE(date) AS date,
-                SUM(minutes) AS total
-            FROM workouts
-            WHERE user_id = :uid
-              AND date >= (CURDATE() - INTERVAL 7 DAY)
-            GROUP BY DATE(date)
-            ORDER BY date ASC
-        ";
-    }
+    $sql = "
+        SELECT
+            date::date AS date,
+            SUM(minutes) AS total
+        FROM workouts
+        WHERE user_id = :uid
+          AND date >= CURRENT_DATE - INTERVAL '7 days'
+        GROUP BY date::date
+        ORDER BY date::date ASC
+    ";
 
     $stmt = $pdo->prepare($sql);
     $stmt->execute([':uid' => $userId]);
@@ -551,38 +562,24 @@ if ($action === 'get_user_info') {
 
 } elseif ($action === 'generate_bind_code') {
     // 產生 6 位數綁定碼（你也可以改成 4 位）
-    global $pdo, $DB_DRIVER;
+    global $pdo;
 
     $code = (string)random_int(1000, 9999); // 先用 4 位，和你原本需求一致
 
     // 10 分鐘有效
     $expiresAt = (new DateTimeImmutable())->add(new DateInterval('PT10M'));
 
-    if ($DB_DRIVER === 'pgsql') {
-        $stmt = $pdo->prepare("
-            UPDATE users
-            SET line_bind_code = :code,
-                line_bind_code_expires_at = :exp
-            WHERE id = :id
-        ");
-        $stmt->execute([
-            ':code' => $code,
-            ':exp'  => $expiresAt->format('Y-m-d H:i:sP'),
-            ':id'   => $userId,
-        ]);
-    } else {
-        $stmt = $pdo->prepare("
-            UPDATE users
-            SET line_bind_code = :code,
-                line_bind_code_expires_at = :exp
-            WHERE id = :id
-        ");
-        $stmt->execute([
-            ':code' => $code,
-            ':exp'  => $expiresAt->format('Y-m-d H:i:s'),
-            ':id'   => $userId,
-        ]);
-    }
+    $stmt = $pdo->prepare("
+        UPDATE users
+        SET line_bind_code = :code,
+            line_bind_code_expires_at = :exp
+        WHERE id = :id
+    ");
+    $stmt->execute([
+        ':code' => $code,
+        ':exp'  => $expiresAt->format('Y-m-d H:i:sP'),
+        ':id'   => $userId,
+    ]);
 
     sendResponse(['success' => true, 'code' => $code]);
 

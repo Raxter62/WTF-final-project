@@ -2,7 +2,6 @@
 
 const API_URL = 'submit.php';
 let currentUser = null;
-let isDemoMode = false;
 let globalTimeRange = '1d'; // 1d, 1wk, 1m, 3m
 
 // 運動圖示對照
@@ -16,8 +15,8 @@ document.addEventListener('DOMContentLoaded', () => {
     setupForms();
 
     // Default date/time
-    const datePart = document.getElementById('input-date');
-    const timePart = document.getElementById('input-time');
+    const datePart = document.getElementById('input-date-part');
+    const timePart = document.getElementById('input-time-part');
     if (datePart && timePart) {
         const now = new Date();
         const year = now.getFullYear();
@@ -34,7 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // --- Auth ---
 async function checkLogin() {
     try {
-        const res = await fetch(`${API_URL}?action=get_user_info`);
+        const res = await fetch(`${API_URL}?action=get_user_info`, { credentials: 'same-origin' });
         const json = await res.json();
 
         if (json.success && json.data) {
@@ -50,13 +49,13 @@ async function checkLogin() {
 }
 
 function showLogin() {
-    document.getElementById('auth-container').style.display = 'block';
-    document.getElementById('dashboard-container').style.display = 'none';
+    document.getElementById('auth-view').classList.remove('hidden');
+    document.getElementById('dashboard-view').classList.add('hidden');
 }
 
 function showDashboard() {
-    document.getElementById('auth-container').style.display = 'none';
-    document.getElementById('dashboard-container').style.display = 'block';
+    document.getElementById('auth-view').classList.add('hidden');
+    document.getElementById('dashboard-view').classList.remove('hidden');
 
     updateProfileUI();
     loadAllCharts();
@@ -64,7 +63,6 @@ function showDashboard() {
 
 async function handleLogin(e) {
     e.preventDefault();
-    if (isDemoMode) { demoLogin(); return; }
 
     const fd = new FormData(e.target);
     const email = (fd.get('email') || '').toString().trim();
@@ -84,17 +82,14 @@ async function handleLogin(e) {
 
 async function handleRegister(e) {
     e.preventDefault();
-    if (isDemoMode) { demoLogin(); return; }
 
     const fd = new FormData(e.target);
     const display_name = (fd.get('display_name') || '').toString().trim();
     const email = (fd.get('email') || '').toString().trim();
     const password = (fd.get('password') || '').toString();
-    const password2 = (fd.get('password2') || '').toString();
 
     if (!display_name) { alert('請輸入暱稱'); return; }
     if (!email || !password) { alert('請輸入 Email 和密碼'); return; }
-    if (password !== password2) { alert('兩次密碼輸入不一致'); return; }
 
     const res = await fetchPost('register', { display_name, email, password });
     if (res.success) {
@@ -106,13 +101,6 @@ async function handleRegister(e) {
 }
 
 async function logout() {
-    if (isDemoMode) {
-        currentUser = null;
-        isDemoMode = false;
-        showLogin();
-        return;
-    }
-
     const res = await fetchPost('logout', {});
     if (res.success) {
         currentUser = null;
@@ -120,19 +108,6 @@ async function logout() {
     } else {
         alert(res.message || '登出失敗');
     }
-}
-
-// Demo login (保留原本功能)
-function demoLogin() {
-    isDemoMode = true;
-    currentUser = {
-        id: 999,
-        display_name: 'Demo User',
-        email: 'demo@fitconnect.dev',
-        height: 170,
-        weight: 65
-    };
-    showDashboard();
 }
 
 // --- UI setup ---
@@ -197,15 +172,6 @@ async function saveProfile() {
         weight: weight
     };
 
-    if (isDemoMode) {
-        currentUser.display_name = name;
-        currentUser.height = height;
-        currentUser.weight = weight;
-        updateProfileUI();
-        cancelProfileEdit();
-        return;
-    }
-
     try {
         const res = await fetch(`${API_URL}?action=update_profile`, {
             method: 'POST',
@@ -231,8 +197,8 @@ async function saveProfile() {
 async function handleAddWorkout(e) {
     e.preventDefault();
 
-    const datePart = document.getElementById('input-date').value;
-    const timePart = document.getElementById('input-time').value;
+    const datePart = document.getElementById('input-date-part').value;
+    const timePart = document.getElementById('input-time-part').value;
     const type = document.getElementById('input-type').value;
     const minutes = parseInt(document.getElementById('input-minutes').value || '0', 10);
     const calories = parseInt(document.getElementById('input-calories').value || '0', 10);
@@ -245,14 +211,11 @@ async function handleAddWorkout(e) {
 
     const payload = {
         date: fullDate,
-        type, minutes, calories
+        type,
+        minutes,
+        calories,
+        range: globalTimeRange,
     };
-
-    if (isDemoMode) {
-        alert('Demo: 新增成功');
-        // loadAllCharts(); 
-        return;
-    }
 
     const res = await fetch(`${API_URL}?action=add_workout`, {
         method: 'POST',
@@ -262,7 +225,18 @@ async function handleAddWorkout(e) {
     const json = await res.json();
     if (json.success) {
         alert('新增成功');
-        location.reload();
+
+        if (json.data?.dashboard) {
+            applyDashboardData(json.data.dashboard);
+        } else {
+            await loadAllCharts();
+        }
+
+        if (json.data?.leaderboard) {
+            renderLeaderboard(json.data.leaderboard);
+        } else {
+            await renderLeaderboard();
+        }
     } else {
         alert('失敗: ' + json.message);
     }
@@ -310,58 +284,38 @@ function setGlobalRange(range) {
     loadAllCharts();
 }
 
-function generateChartData() {
+function buildEmptyChartData(range = globalTimeRange) {
     let labels = [];
-    let barData = [];
-    let lineData = [];
-    let pieData = [30, 20, 15, 10, 25];
+    let length = 0;
 
-    if (globalTimeRange === '1d') {
+    if (range === '1d') {
         labels = ['00:00', '03:00', '06:00', '09:00', '12:00', '15:00', '18:00', '21:00'];
-        barData = [15, 10, 0, 20, 30, 25, 15, 5];
-        lineData = [200, 150, 100, 250, 300, 280, 220, 180];
-        pieData = [40, 10, 15, 20, 15];
-    } else if (globalTimeRange === '1wk') {
-        labels = ['一', '二', '三', '四', '五', '六', '日'];
-        barData = getDataPoints(7, 120);
-        lineData = getDataPoints(7, 1200);
-        pieData = [20, 25, 10, 15, 30];
-    } else if (globalTimeRange === '1m') {
-        labels = ['第1週', '第2週', '第3週', '第4週'];
-        barData = [500, 600, 450, 700];
-        lineData = [6000, 7200, 5000, 8000];
-        pieData = [30, 20, 15, 10, 25];
+        length = labels.length;
     } else {
-        labels = ['一月', '二月', '三月'];
-        barData = getDataPoints(3, 2000);
-        lineData = getDataPoints(3, 15000);
-        pieData = [500, 300, 400, 200, 600];
+        const days = range === '1wk' ? 7 : range === '1m' ? 30 : 90;
+        const start = new Date();
+        start.setHours(0, 0, 0, 0);
+        start.setDate(start.getDate() - (days - 1));
+
+        for (let i = 0; i < days; i++) {
+            const d = new Date(start);
+            d.setDate(start.getDate() + i);
+            labels.push(`${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`);
+        }
+        length = days;
     }
 
-    chartCache.barLabels = labels;
-    chartCache.barData = barData;
-    chartCache.lineLabels = labels;
-    chartCache.lineData = lineData;
-    chartCache.pieData = pieData;
-    chartCache.pieLabels = ['跑步', '重訓', '腳踏車', '游泳', '瑜珈'];
-
-    if (!barInstance) initCharts();
-}
-
-function getDataPoints(count, maxVal) {
-    return Array.from({ length: count }, () => Math.floor(Math.random() * maxVal));
+    return {
+        barLabels: labels,
+        barData: Array(length).fill(0),
+        lineLabels: labels,
+        lineData: Array(length).fill(0),
+        pieLabels: ['跑步', '重訓', '腳踏車', '游泳', '瑜珈', '其他'],
+        pieData: [0, 0, 0, 0, 0, 0]
+    };
 }
 
 async function loadAllCharts() {
-    // Demo 模式：維持原本的隨機資料行為
-    if (isDemoMode) {
-        generateChartData();
-        if (!barInstance) initCharts();
-        updateCharts();
-        renderLeaderboard();
-        return;
-    }
-
     try {
         const res = await fetch(`${API_URL}?action=get_dashboard_data&range=${encodeURIComponent(globalTimeRange)}`, {
             method: 'GET',
@@ -370,39 +324,39 @@ async function loadAllCharts() {
         const json = await res.json();
 
         if (json.success && json.data) {
-            const d = json.data;
-
-            // Bar: minutes
-            chartCache.barLabels = (d.bar && d.bar.labels) ? d.bar.labels : [];
-            chartCache.barData = (d.bar && d.bar.data) ? d.bar.data : [];
-
-            // Line: calories
-            chartCache.lineLabels = (d.line && d.line.labels) ? d.line.labels : [];
-            chartCache.lineData = (d.line && d.line.data) ? d.line.data : [];
-
-            // Pie: calories by type
-            chartCache.pieLabels = (d.pie && d.pie.labels) ? d.pie.labels : ['跑步', '重訓', '腳踏車', '游泳', '瑜珈', '其他'];
-            chartCache.pieData = (d.pie && d.pie.data) ? d.pie.data : [0, 0, 0, 0, 0, 0];
-
-            if (!barInstance) initCharts();
-            updateCharts();
+            applyDashboardData(json.data);
         } else {
-            // 後端回傳失敗：保留原本行為（隨機資料）作為備援
             console.warn('get_dashboard_data failed:', json);
-            generateChartData();
+            chartCache = buildEmptyChartData();
             if (!barInstance) initCharts();
             updateCharts();
         }
     } catch (e) {
         console.error('loadAllCharts error:', e);
-        // 連線失敗：保留原本行為作為備援
-        generateChartData();
+        chartCache = buildEmptyChartData();
         if (!barInstance) initCharts();
         updateCharts();
     }
 
     // 排行榜（仍走後端，若失敗會顯示「載入失敗」）
     renderLeaderboard();
+}
+
+function applyDashboardData(dashboard) {
+    // Bar: minutes
+    chartCache.barLabels = dashboard?.bar?.labels || [];
+    chartCache.barData = dashboard?.bar?.data || [];
+
+    // Line: calories
+    chartCache.lineLabels = dashboard?.line?.labels || [];
+    chartCache.lineData = dashboard?.line?.data || [];
+
+    // Pie: calories by type
+    chartCache.pieLabels = dashboard?.pie?.labels || ['跑步', '重訓', '腳踏車', '游泳', '瑜珈', '其他'];
+    chartCache.pieData = dashboard?.pie?.data || [0, 0, 0, 0, 0, 0];
+
+    if (!barInstance) initCharts();
+    updateCharts();
 }
 
 let barInstance = null;
@@ -537,9 +491,39 @@ function cancelProfileEdit() {
 }
 
 // --- Leaderboard ---
-async function renderLeaderboard() {
+async function renderLeaderboard(prefetched) {
     const tbody = document.getElementById('leaderboard-body');
     if (!tbody) return;
+
+    const renderRows = (users) => {
+        if (!users || users.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3">暫無資料</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = '';
+        users.forEach((u, i) => {
+            const tr = document.createElement('tr');
+            const rank = i < 3 ? ['🥇', '🥈', '🥉'][i] : (i + 1);
+            const name = u.display_name || 'User';
+
+            tr.innerHTML = `
+                <td><span style="font-size: 1.2rem;">${rank}</span></td>
+                <td><strong>${name}</strong></td>
+                <td>${u.total}</td>
+            `;
+
+            if (currentUser && name === currentUser.display_name) {
+                tr.style.background = 'rgba(255, 71, 87, 0.1)';
+            }
+            tbody.appendChild(tr);
+        });
+    };
+
+    if (prefetched) {
+        renderRows(prefetched);
+        return;
+    }
 
     try {
         const res = await fetch(`${API_URL}?action=get_leaderboard`);
@@ -550,29 +534,7 @@ async function renderLeaderboard() {
             return;
         }
 
-        const users = json.data;
-        tbody.innerHTML = '';
-
-        users.forEach((u, i) => {
-            const tr = document.createElement('tr');
-            // Adds crown for top 3
-            const rank = i < 3 ? ['🥇', '🥈', '🥉'][i] : (i + 1);
-
-            // display_name might be null, fallback
-            const name = u.display_name || 'User';
-
-            tr.innerHTML = `
-                <td><span style="font-size: 1.2rem;">${rank}</span></td>
-                <td><strong>${name}</strong></td>
-                <td>${u.total}</td>
-            `;
-            // Highlight current user
-            if (currentUser && name === currentUser.display_name) {
-                tr.style.background = 'rgba(255, 71, 87, 0.1)';
-            }
-            tbody.appendChild(tr);
-        });
-
+        renderRows(json.data);
     } catch (e) {
         console.error('Leaderboard error:', e);
         tbody.innerHTML = '<tr><td colspan="3">載入失敗</td></tr>';
@@ -580,11 +542,6 @@ async function renderLeaderboard() {
 }
 
 async function fetchPost(action, data) {
-    // Demo 模式：維持原本假資料流程
-    if (typeof isDemoMode !== 'undefined' && isDemoMode) {
-        return { success: true, data: null };
-    }
-
     try {
         const res = await fetch(`${API_URL}?action=${encodeURIComponent(action)}`, {
             method: 'POST',
