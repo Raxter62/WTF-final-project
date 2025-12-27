@@ -5,6 +5,7 @@ const ASSETS_TO_CACHE = [
     './public/css/style.css',
     './public/js/main.js',
     './public/js/ai_chat.js',
+    './public/js/bg-effects.js',
     './manifest.json'
 ];
 
@@ -12,7 +13,7 @@ self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(CACHE_NAME).then((cache) => {
             // 若某些檔案不存在則忽略失敗
-            return cache.addAll(ASSETS_TO_CACHE).catch(err => console.log('Cache addAll error:', err));
+            return cache.addAll(ASSETS_TO_CACHE).catch(err => console.log('Cache addAll error:', err))
         })
     );
 });
