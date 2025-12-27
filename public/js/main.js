@@ -61,7 +61,9 @@ function showDashboard() {
     document.getElementById('ai-coach-container').classList.remove('hidden');
 
     document.getElementById('user-display-name').textContent = currentUser.display_name;
-    document.getElementById('new-display-name').value = currentUser.display_name;
+    // document.getElementById('new-display-name').value = currentUser.display_name; // remove old Input
+
+    updateProfileUI();
 
     // 載入頭像
     // 載入頭像
@@ -115,6 +117,15 @@ async function handleRegister(e) { e.preventDefault(); demoLogin(); }
 
 async function handleAddWorkout(e) {
     e.preventDefault();
+
+    // Check Profile
+    if (!currentUser || !currentUser.height || !currentUser.weight) {
+        alert('請先完善個人資料(身高、體重)才能新增紀錄！');
+        // Trigger edit
+        enableProfileEdit();
+        return;
+    }
+
     const datePart = document.getElementById('input-date-part').value;
     const timePart = document.getElementById('input-time-part').value;
     const fullDate = `${datePart} ${timePart}:00`; // YYYY-MM-DD HH:mm:ss
@@ -151,10 +162,34 @@ async function handleAddWorkout(e) {
 function calculateCalories() {
     const type = document.getElementById('input-type').value;
     const mins = parseInt(document.getElementById('input-minutes').value) || 0;
-    const coeff = { '跑步': 10, '重訓': 6, '腳踏車': 8, '游泳': 12, '瑜珈': 4, '其他': 5 };
-    const total = mins * (coeff[type] || 5);
-    document.getElementById('calc-val').textContent = total;
-    document.getElementById('input-calories').value = total;
+
+    // MET values
+    const metTable = {
+        '跑步': 10,
+        '重訓': 4,
+        '腳踏車': 8,
+        '游泳': 6,
+        '瑜珈': 3,
+        '其他': 2
+    };
+    const met = metTable[type] || 2;
+
+    // Check if weight is set
+    const weight = (currentUser && currentUser.weight) ? parseFloat(currentUser.weight) : null;
+
+    if (!weight) {
+        document.getElementById('calorie-display-area').classList.add('hidden');
+        document.getElementById('input-calories').value = 0;
+        return;
+    }
+
+    // Formula: kcal = ((MET * 3.5 * weight) / 200) * time
+    const total = ((met * 3.5 * weight) / 200) * mins;
+
+    const finalVal = Math.round(total);
+
+    document.getElementById('calc-val').textContent = finalVal;
+    document.getElementById('input-calories').value = finalVal;
     document.getElementById('calorie-display-area').classList.remove('hidden');
 }
 
@@ -393,42 +428,103 @@ function changeAvatar(dir) {
     }, 300);
 }
 
-// --- Inline Name Edit ---
-function enableNameEdit() {
+// --- Inline Profile Edit ---
+function enableProfileEdit() {
     const nameDisplay = document.getElementById('user-display-name');
-    const currentName = nameDisplay.textContent;
+    const statsDisplay = document.getElementById('profile-stats');
     const parent = nameDisplay.parentElement;
 
-    // Create Input
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.value = currentName;
-    input.className = 'inline-name-input';
-    input.onblur = () => saveNewName(input.value);
-    input.onkeypress = (e) => { if (e.key === 'Enter') saveNewName(input.value); };
+    if (document.querySelector('.edit-profile-container')) return;
 
-    // Replace h2 with input
+    const currentName = currentUser.display_name || '';
+    const currentHeight = currentUser.height || '';
+    const currentWeight = currentUser.weight || '';
+
+    // Hide display
     nameDisplay.style.display = 'none';
-    parent.insertBefore(input, nameDisplay);
-    input.focus();
+    statsDisplay.style.display = 'none';
+
+    // Create Edit Container
+    const container = document.createElement('div');
+    container.className = 'edit-profile-container';
+    container.innerHTML = `
+        <div style="margin-bottom: 5px;"><input type="text" id="edit-name" class="form-control" value="${currentName}" placeholder="暱稱"></div>
+        <div style="display: flex; gap: 10px; margin-bottom: 5px;">
+            <input type="number" id="edit-height" class="form-control" value="${currentHeight}" placeholder="身高 (cm)">
+            <input type="number" id="edit-weight" class="form-control" value="${currentWeight}" placeholder="體重 (kg)">
+        </div>
+        <button class="btn-primary" style="padding: 5px 15px; font-size: 0.9rem;" onclick="saveProfile()">儲存</button>
+        <button class="btn-primary" style="padding: 5px 15px; font-size: 0.9rem; background: #999;" onclick="cancelProfileEdit()">取消</button>
+    `;
+
+    parent.appendChild(container);
 }
 
-function saveNewName(newName) {
-    if (!newName.trim()) return;
-
-    // Update Data
-    if (currentUser) currentUser.display_name = newName;
-
-    // Update UI
+function cancelProfileEdit() {
     const nameDisplay = document.getElementById('user-display-name');
-    nameDisplay.textContent = newName;
+    const statsDisplay = document.getElementById('profile-stats');
     nameDisplay.style.display = 'block';
+    statsDisplay.style.display = 'block';
+    const c = document.querySelector('.edit-profile-container');
+    if (c) c.remove();
+}
 
-    // Remove Input
-    const input = document.querySelector('.inline-name-input');
-    if (input) input.remove();
+async function saveProfile() {
+    const name = document.getElementById('edit-name').value;
+    const height = document.getElementById('edit-height').value;
+    const weight = document.getElementById('edit-weight').value;
 
-    console.log('Saved name:', newName);
+    if (!name.trim()) { alert('請輸入暱稱'); return; }
+
+    const payload = {
+        display_name: name,
+        height: height,
+        weight: weight
+    };
+
+    if (isDemoMode) {
+        currentUser.display_name = name;
+        currentUser.height = height;
+        currentUser.weight = weight;
+        updateProfileUI();
+        cancelProfileEdit();
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_URL}?action=update_profile`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const json = await res.json();
+        if (json.success) {
+            currentUser.display_name = name;
+            currentUser.height = height;
+            currentUser.weight = weight;
+            updateProfileUI();
+            cancelProfileEdit();
+        } else {
+            alert(json.message || '更新失敗');
+        }
+    } catch (e) {
+        console.error(e);
+        alert('連線錯誤');
+    }
+}
+
+function updateProfileUI() {
+    document.getElementById('user-display-name').textContent = currentUser.display_name;
+
+    const h = currentUser.height ? `${currentUser.height}cm` : '';
+    const w = currentUser.weight ? `${currentUser.weight}kg` : '';
+    let text = '';
+    if (h && w) text = `${h} / ${w}`;
+    else if (h) text = h;
+    else if (w) text = w;
+    else text = '完善個人資料以計算熱量';
+
+    document.getElementById('profile-stats').textContent = text;
 }
 
 // --- Leaderboard ---
