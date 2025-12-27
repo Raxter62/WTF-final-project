@@ -41,11 +41,9 @@ function sendResponse(array $data): void {
     exit;
 }
 
-function requireLogin(): int {
-    if (!isset($_SESSION['user_id'])) {
-        sendResponse(['success' => false, 'message' => '尚未登入']);
-    }
-    return (int)$_SESSION['user_id'];
+function normalizeRange(?string $range): string {
+    $range = $range ?: '1d';
+    return in_array($range, ['1d', '1wk', '1m', '3m'], true) ? $range : '1d';
 }
 
 // 讀取輸入
@@ -272,8 +270,8 @@ if ($action === 'get_user_info') {
     // - Pie：各運動種類卡路里分佈
     global $pdo;
 
-    $range = (string)($_GET['range'] ?? '1d');
-    $range = in_array($range, ['1d', '1wk', '1m', '3m'], true) ? $range : '1d';
+function buildDashboardData(PDO $pdo, int $userId, string $driver, string $range): array {
+    $range = normalizeRange($range);
 
     // 依 range 決定查詢區間與分組粒度
     // 1d：用 3 小時一格（00-03, 03-06...）
@@ -384,13 +382,107 @@ if ($action === 'get_user_info') {
         $pieData[] = $pieMap[$lab] ?? 0;
     }
 
+    return [
+        'bar' => ['labels' => $labels, 'data' => $bar],
+        'line' => ['labels' => $labels, 'data' => $line],
+        'pie' => ['labels' => $fixedLabels, 'data' => $pieData],
+    ];
+}
+
+function requireLogin(): int {
+    if (!isset($_SESSION['user_id'])) {
+        sendResponse(['success' => false, 'message' => '尚未登入']);
+    }
+    return (int)$_SESSION['user_id'];
+}
+
+// 讀取輸入
+$input  = getJsonInput();
+$action = $input['action'] ?? ($_GET['action'] ?? null);
+
+// --- 公開動作（不需登入） ---
+
+if ($action === 'register') {
+    global $pdo;
+
+    $email = trim((string)($input['email'] ?? ''));
+    $pass  = (string)($input['password'] ?? '');
+    $name  = trim((string)($input['display_name'] ?? 'User'));
+
+    if ($email === '' || $pass === '') {
+        sendResponse(['success' => false, 'message' => '請輸入 Email 和密碼']);
+    }
+
+    // 檢查 email 是否已存在
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE email = :email LIMIT 1");
+    $stmt->execute([':email' => $email]);
+    if ($stmt->fetch()) {
+        sendResponse(['success' => false, 'message' => '此 Email 已被註冊']);
+    }
+
+    $hash = password_hash($pass, PASSWORD_DEFAULT);
+
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO users (email, password_hash, display_name)
+            VALUES (:email, :hash, :name)
+            RETURNING id
+        ");
+        $stmt->execute([':email' => $email, ':hash' => $hash, ':name' => $name]);
+        $userId = (int)$stmt->fetchColumn();
+    } catch (PDOException $e) {
+        sendResponse(['success' => false, 'message' => '註冊失敗', 'error' => $e->getMessage()]);
+    }
+
+    // 自動登入
+    $_SESSION['user_id'] = $userId;
+
+    // 回傳使用者資訊（main.js 需要 id 來存 avatar localStorage key）
     sendResponse([
         'success' => true,
         'data' => [
-            'bar' => ['labels' => $labels, 'data' => $bar],
-            'line' => ['labels' => $labels, 'data' => $line],
-            'pie' => ['labels' => $fixedLabels, 'data' => $pieData],
+            'id' => $userId,
+            'display_name' => $name,
+            'email' => $email,
+            'height' => null,
+            'weight' => null,
         ]
+    ]);
+
+} elseif ($action === 'get_stats') {
+    // 保留舊 action（如果你哪裡還在用），但修正 MySQL/PGSQL 相容
+    global $pdo;
+
+    $sql = "
+        SELECT
+            date::date AS date,
+            SUM(minutes) AS total
+        FROM workouts
+        WHERE user_id = :uid
+          AND date >= CURRENT_DATE - INTERVAL '7 days'
+        GROUP BY date::date
+        ORDER BY date::date ASC
+    ";
+
+} elseif ($action === 'get_leaderboard') {
+    global $pdo, $DB_DRIVER;
+
+    $rows = buildLeaderboard($pdo, $DB_DRIVER);
+    sendResponse(['success' => true, 'data' => $rows]);
+
+} elseif ($action === 'get_dashboard_data') {
+    // ✅ main.js 會用這個 action 來更新：
+    // - Bar：分鐘數
+    // - Line：卡路里
+    // - Pie：各運動種類卡路里分佈
+    global $pdo, $DB_DRIVER;
+
+    $range = normalizeRange((string)($_GET['range'] ?? '1d'));
+    $data = buildDashboardData($pdo, $userId, $DB_DRIVER, $range);
+
+    sendResponse([
+        'success' => true,
+        'data' => $data,
     ]);
 
 } elseif ($action === 'get_stats') {
