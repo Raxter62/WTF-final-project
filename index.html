@@ -650,7 +650,11 @@
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 credentials: 'same-origin',
-                                body: JSON.stringify({ email, password })
+                                body: JSON.stringify({ 
+                                    action: 'login',  // 加入 action
+                                    email, 
+                                    password 
+                                })
                             });
                             
                             const text = await res.text();
@@ -659,7 +663,7 @@
                             console.log('📥 登入回應:', json);
                             
                             if (json.success) {
-                                console.log('✅ 登入成功');
+                                console.log('✅ 登入成功，重新載入頁面...');
                                 location.reload();
                             } else {
                                 alert('登入失敗: ' + (json.message || '帳號或密碼錯誤'));
@@ -696,7 +700,12 @@
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 credentials: 'same-origin',
-                                body: JSON.stringify({ display_name, email, password })
+                                body: JSON.stringify({ 
+                                    action: 'register',  // 加入 action
+                                    display_name, 
+                                    email, 
+                                    password 
+                                })
                             });
                             
                             const text = await res.text();
@@ -705,7 +714,7 @@
                             console.log('📥 註冊回應:', json);
                             
                             if (json.success) {
-                                console.log('✅ 註冊成功');
+                                console.log('✅ 註冊成功，重新載入頁面...');
                                 location.reload();
                             } else {
                                 alert('註冊失敗: ' + (json.message || '未知錯誤'));
