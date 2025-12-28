@@ -191,20 +191,6 @@
             display: inline-block;
         }
 
-        .avatar-picker {
-            margin-top: 1rem;
-            width: 100%;
-            max-width: 360px;
-        }
-
-        .avatar-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
-            gap: 10px;
-            justify-items: center;
-            margin-top: 0.75rem;
-        }
-
         .avatar-arrow {
             cursor: pointer;
             font-size: 2rem;
@@ -333,23 +319,15 @@
         <section id="section-hero" class="container hero-container">
             <!-- 左 -->
             <!-- 左 -->
-                <div class="hero-left">
-                    <div class="avatar-wrapper">
-                        <div class="avatar-arrow left" onclick="changeAvatar(-1)">❮</div>
-                        <img src="public/image/1.png" id="current-avatar" class="avatar-img" alt="Avatar">
-                        <div class="avatar-arrow right" onclick="changeAvatar(1)">❯</div>
-                    </div>
+            <div class="hero-left">
+                <div class="avatar-wrapper">
+                    <div class="avatar-arrow left" onclick="changeAvatar(-1)">❮</div>
+                    <img src="public/image/1.png" id="current-avatar" class="avatar-img" alt="Avatar">
+                    <div class="avatar-arrow right" onclick="changeAvatar(1)">❯</div>
+                </div>
 
-                    <div class="avatar-picker">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <h3 style="margin: 0; color: #fff;">選擇頭像</h3>
-                            <small style="color: #cbd5f5;">點擊即可套用</small>
-                        </div>
-                        <div id="avatar-grid" class="avatar-grid"></div>
-                    </div>
-
-                    <!-- Profile View Mode -->
-                    <div id="profile-view" style="text-align: center;">
+                <!-- Profile View Mode -->
+                <div id="profile-view" style="text-align: center;">
                     <div
                         style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 1rem;">
                         <h2 id="profile-name" style="margin: 0; font-size: 2.5rem;">User</h2>
