@@ -17,18 +17,12 @@ function sendResponse($data) {
     exit;
 }
 
-<<<<<<< HEAD
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 $input = getJsonInput();
 
 // Ensure DB connection
 if (!$pdo) {
     sendResponse(['success' => false, 'message' => 'DB 連線失敗']);
-=======
-function normalizeRange(?string $range): string {
-    $range = $range ?: '1d';
-    return in_array($range, ['1d', '1wk', '1m', '3m'], true) ? $range : '1d';
->>>>>>> 7d28427ba262fed486bc3f5c299c9f97af78287c
 }
 
 // --- 驗證相關動作 ---
@@ -104,16 +98,11 @@ if ($action === 'register') {
 
 // --- 需登入後的動作 ---
 
-<<<<<<< HEAD
 // 檢查後續所有動作是否已登入
 if (!isset($_SESSION['user_id'])) {
     sendResponse(['success' => false, 'message' => 'not_logged_in']);
 }
 $userId = $_SESSION['user_id'];
-=======
-function buildDashboardData(PDO $pdo, int $userId, string $driver, string $range): array {
-    $range = normalizeRange($range);
->>>>>>> 7d28427ba262fed486bc3f5c299c9f97af78287c
 
 if ($action === 'get_user_info') {
     $stmt = $pdo->prepare("SELECT id, display_name, email, line_user_id, avatar_id FROM users WHERE id = ?");
@@ -135,107 +124,6 @@ if ($action === 'get_user_info') {
         sendResponse(['success' => false, 'message' => '寫入失敗']);
     }
 
-<<<<<<< HEAD
-=======
-    // Pie：區間內各類型 calories
-    if ($range === '1d') {
-        $where = "date >= (NOW() - INTERVAL '24 hours')";
-    } else {
-        $days = ($range === '1wk') ? 7 : (($range === '1m') ? 30 : 90);
-        $where = "date >= (CURRENT_DATE - INTERVAL '{$days} days')";
-    }
-
-    $sqlPie = "
-        SELECT type, COALESCE(SUM(calories),0) AS total_calories
-        FROM workouts
-        WHERE user_id = :uid
-          AND {$where}
-        GROUP BY type
-    ";
-    $stmt = $pdo->prepare($sqlPie);
-    $stmt->execute([':uid' => $userId]);
-    $pieRows = $stmt->fetchAll();
-
-    // 讓 pie 的 label 順序固定，對應前端圖示/色彩
-    $fixedLabels = ['跑步', '重訓', '腳踏車', '游泳', '瑜珈', '其他'];
-    $pieMap = [];
-    foreach ($pieRows as $r) {
-        $t = (string)$r['type'];
-        $pieMap[$t] = (int)$r['total_calories'];
-    }
-    $pieData = [];
-    foreach ($fixedLabels as $lab) {
-        $pieData[] = $pieMap[$lab] ?? 0;
-    }
-
-    return [
-        'bar' => ['labels' => $labels, 'data' => $bar],
-        'line' => ['labels' => $labels, 'data' => $line],
-        'pie' => ['labels' => $fixedLabels, 'data' => $pieData],
-    ];
-}
-
-function requireLogin(): int {
-    if (!isset($_SESSION['user_id'])) {
-        sendResponse(['success' => false, 'message' => '尚未登入']);
-    }
-    return (int)$_SESSION['user_id'];
-}
-
-// 讀取輸入
-$input  = getJsonInput();
-$action = $input['action'] ?? ($_GET['action'] ?? null);
-
-// --- 公開動作（不需登入） ---
-
-if ($action === 'register') {
-    global $pdo;
-
-    $email = trim((string)($input['email'] ?? ''));
-    $pass  = (string)($input['password'] ?? '');
-    $name  = trim((string)($input['display_name'] ?? 'User'));
-
-    if ($email === '' || $pass === '') {
-        sendResponse(['success' => false, 'message' => '請輸入 Email 和密碼']);
-    }
-
-    // 檢查 email 是否已存在
-    $stmt = $pdo->prepare("SELECT id FROM users WHERE email = :email LIMIT 1");
-    $stmt->execute([':email' => $email]);
-    if ($stmt->fetch()) {
-        sendResponse(['success' => false, 'message' => '此 Email 已被註冊']);
-    }
-
-    $hash = password_hash($pass, PASSWORD_DEFAULT);
-
-    try {
-        $stmt = $pdo->prepare("
-            INSERT INTO users (email, password_hash, display_name)
-            VALUES (:email, :hash, :name)
-            RETURNING id
-        ");
-        $stmt->execute([':email' => $email, ':hash' => $hash, ':name' => $name]);
-        $userId = (int)$stmt->fetchColumn();
-    } catch (PDOException $e) {
-        sendResponse(['success' => false, 'message' => '註冊失敗', 'error' => $e->getMessage()]);
-    }
-
-    // 自動登入
-    $_SESSION['user_id'] = $userId;
-
-    // 回傳使用者資訊（main.js 需要 id 來存 avatar localStorage key）
-    sendResponse([
-        'success' => true,
-        'data' => [
-            'id' => $userId,
-            'display_name' => $name,
-            'email' => $email,
-            'height' => null,
-            'weight' => null,
-        ]
-    ]);
-
->>>>>>> 7d28427ba262fed486bc3f5c299c9f97af78287c
 } elseif ($action === 'get_stats') {
     // 取得時間範圍參數，預設 1d
     $range = $_GET['range'] ?? '1d';
@@ -336,46 +224,6 @@ if ($action === 'register') {
         GROUP BY type
         ORDER BY total DESC
     ";
-<<<<<<< HEAD
-=======
-
-} elseif ($action === 'get_leaderboard') {
-    global $pdo, $DB_DRIVER;
-
-    $rows = buildLeaderboard($pdo, $DB_DRIVER);
-    sendResponse(['success' => true, 'data' => $rows]);
-
-} elseif ($action === 'get_dashboard_data') {
-    // ✅ main.js 會用這個 action 來更新：
-    // - Bar：分鐘數
-    // - Line：卡路里
-    // - Pie：各運動種類卡路里分佈
-    global $pdo, $DB_DRIVER;
-
-    $range = normalizeRange((string)($_GET['range'] ?? '1d'));
-    $data = buildDashboardData($pdo, $userId, $DB_DRIVER, $range);
-
-    sendResponse([
-        'success' => true,
-        'data' => $data,
-    ]);
-
-} elseif ($action === 'get_stats') {
-    // 保留舊 action（如果你哪裡還在用），但修正 MySQL/PGSQL 相容
-    global $pdo;
-
-    $sql = "
-        SELECT
-            date::date AS date,
-            SUM(minutes) AS total
-        FROM workouts
-        WHERE user_id = :uid
-          AND date >= CURRENT_DATE - INTERVAL '7 days'
-        GROUP BY date::date
-        ORDER BY date::date ASC
-    ";
-
->>>>>>> 7d28427ba262fed486bc3f5c299c9f97af78287c
     $stmt = $pdo->prepare($sql);
     $stmt->execute([':uid' => $userId]);
     $types = $stmt->fetchAll();
