@@ -80,6 +80,49 @@ function showLogin() {
     if (authView) authView.classList.remove('hidden');
     if (dashboardView) dashboardView.classList.add('hidden');
     if (coachContainer) coachContainer.classList.add('hidden');
+    
+    // 清空登入表單
+    const loginForm = document.getElementById('login-form');
+    if (loginForm) {
+        const emailInput = loginForm.querySelector('input[name="email"]');
+        const passwordInput = loginForm.querySelector('input[name="password"]');
+        if (emailInput) emailInput.value = '';
+        if (passwordInput) passwordInput.value = '';
+    }
+    
+    // 清空註冊表單
+    const registerForm = document.getElementById('register-form');
+    if (registerForm) {
+        const nameInput = registerForm.querySelector('input[name="display_name"]');
+        const emailInput = registerForm.querySelector('input[name="email"]');
+        const passwordInput = registerForm.querySelector('input[name="password"]');
+        if (nameInput) nameInput.value = '';
+        if (emailInput) emailInput.value = '';
+        if (passwordInput) passwordInput.value = '';
+    }
+    
+    // 切換回登入 tab
+    const loginTab = document.getElementById('tab-login');
+    const registerTab = document.getElementById('tab-register');
+    
+    if (loginForm && registerForm) {
+        loginForm.classList.remove('hidden');
+        registerForm.classList.add('hidden');
+    }
+    
+    // 設定按鈕樣式：登入按鈕為橘色
+    if (loginTab) {
+        loginTab.classList.add('active');
+        loginTab.style.backgroundColor = '#FF6B35';
+        loginTab.style.color = 'white';
+    }
+    if (registerTab) {
+        registerTab.classList.remove('active');
+        registerTab.style.backgroundColor = 'transparent';
+        registerTab.style.color = '#666';
+    }
+    
+    console.log('✅ 已清空表單欄位');
 }
 
 function showDashboard() {
@@ -172,15 +215,43 @@ function setupForms() {
 function switchTab(tab) {
     const loginFn = document.getElementById('login-form');
     const regFn = document.getElementById('register-form');
+    const loginBtn = document.getElementById('tab-login');
+    const registerBtn = document.getElementById('tab-register');
     
     if (!loginFn || !regFn) return;
     
     if (tab === 'login') {
+        // 顯示登入表單
         loginFn.classList.remove('hidden');
         regFn.classList.add('hidden');
+        
+        // 切換按鈕樣式
+        if (loginBtn) {
+            loginBtn.classList.add('active');
+            loginBtn.style.backgroundColor = '#FF6B35';
+            loginBtn.style.color = 'white';
+        }
+        if (registerBtn) {
+            registerBtn.classList.remove('active');
+            registerBtn.style.backgroundColor = 'transparent';
+            registerBtn.style.color = '#666';
+        }
     } else {
+        // 顯示註冊表單
         loginFn.classList.add('hidden');
         regFn.classList.remove('hidden');
+        
+        // 切換按鈕樣式
+        if (loginBtn) {
+            loginBtn.classList.remove('active');
+            loginBtn.style.backgroundColor = 'transparent';
+            loginBtn.style.color = '#666';
+        }
+        if (registerBtn) {
+            registerBtn.classList.add('active');
+            registerBtn.style.backgroundColor = '#FF6B35';
+            registerBtn.style.color = 'white';
+        }
     }
 }
 
@@ -493,7 +564,231 @@ async function fetchPost(action, data = {}) {
 }
 
 function updateProfileUI() {
-    // 個人資料 UI 更新
+    // 更新身高體重顯示
+    if (!currentUser) return;
+    
+    const heightEl = document.getElementById('user-height');
+    const weightEl = document.getElementById('user-weight');
+    
+    if (heightEl && currentUser.height) {
+        heightEl.textContent = currentUser.height + ' cm';
+    } else if (heightEl) {
+        heightEl.textContent = '未設定';
+    }
+    
+    if (weightEl && currentUser.weight) {
+        weightEl.textContent = currentUser.weight + ' kg';
+    } else if (weightEl) {
+        weightEl.textContent = '未設定';
+    }
+}
+
+// 顯示編輯身高體重彈窗
+function showEditProfileModal() {
+    console.log('📝 開啟編輯身高體重彈窗');
+    
+    // 建立彈窗 HTML
+    const modal = document.createElement('div');
+    modal.id = 'edit-profile-modal';
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+        animation: fadeIn 0.3s ease;
+    `;
+    
+    const currentHeight = currentUser.height || '';
+    const currentWeight = currentUser.weight || '';
+    
+    modal.innerHTML = `
+        <div style="
+            background: white;
+            padding: 2rem;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            max-width: 400px;
+            width: 90%;
+            animation: slideUp 0.3s ease;
+        ">
+            <h2 style="margin: 0 0 1.5rem 0; color: #333; font-size: 1.5rem;">
+                ✏️ 編輯個人資料
+            </h2>
+            
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.5rem; color: #666; font-weight: 600;">
+                    身高 (cm)
+                </label>
+                <input 
+                    type="number" 
+                    id="modal-height" 
+                    value="${currentHeight}"
+                    placeholder="例如：170"
+                    style="
+                        width: 100%;
+                        padding: 0.75rem;
+                        border: 2px solid #ddd;
+                        border-radius: 8px;
+                        font-size: 1rem;
+                        box-sizing: border-box;
+                    "
+                >
+            </div>
+            
+            <div style="margin-bottom: 1.5rem;">
+                <label style="display: block; margin-bottom: 0.5rem; color: #666; font-weight: 600;">
+                    體重 (kg)
+                </label>
+                <input 
+                    type="number" 
+                    id="modal-weight" 
+                    value="${currentWeight}"
+                    placeholder="例如：65"
+                    style="
+                        width: 100%;
+                        padding: 0.75rem;
+                        border: 2px solid #ddd;
+                        border-radius: 8px;
+                        font-size: 1rem;
+                        box-sizing: border-box;
+                    "
+                >
+            </div>
+            
+            <div style="display: flex; gap: 1rem;">
+                <button 
+                    onclick="closeEditProfileModal()"
+                    style="
+                        flex: 1;
+                        padding: 0.75rem;
+                        border: 2px solid #ddd;
+                        border-radius: 8px;
+                        background: white;
+                        color: #666;
+                        font-size: 1rem;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.3s;
+                    "
+                    onmouseover="this.style.background='#f5f5f5'"
+                    onmouseout="this.style.background='white'"
+                >
+                    取消
+                </button>
+                <button 
+                    onclick="saveProfile()"
+                    style="
+                        flex: 1;
+                        padding: 0.75rem;
+                        border: none;
+                        border-radius: 8px;
+                        background: #FF6B35;
+                        color: white;
+                        font-size: 1rem;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.3s;
+                    "
+                    onmouseover="this.style.background='#ff5722'"
+                    onmouseout="this.style.background='#FF6B35'"
+                >
+                    儲存
+                </button>
+            </div>
+        </div>
+    `;
+    
+    // 加入 CSS 動畫
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+    `;
+    document.head.appendChild(style);
+    
+    document.body.appendChild(modal);
+    
+    // 點擊背景關閉
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            closeEditProfileModal();
+        }
+    });
+}
+
+// 關閉彈窗
+function closeEditProfileModal() {
+    const modal = document.getElementById('edit-profile-modal');
+    if (modal) {
+        modal.style.animation = 'fadeOut 0.3s ease';
+        setTimeout(() => modal.remove(), 300);
+    }
+}
+
+// 儲存身高體重
+async function saveProfile() {
+    const heightInput = document.getElementById('modal-height');
+    const weightInput = document.getElementById('modal-weight');
+    
+    const height = parseFloat(heightInput.value);
+    const weight = parseFloat(weightInput.value);
+    
+    // 驗證
+    if (!height || height <= 0 || height > 300) {
+        alert('請輸入有效的身高（1-300 cm）');
+        return;
+    }
+    
+    if (!weight || weight <= 0 || weight > 500) {
+        alert('請輸入有效的體重（1-500 kg）');
+        return;
+    }
+    
+    console.log('💾 儲存身高體重:', height, weight);
+    
+    try {
+        const res = await fetch(`${API_URL}?action=update_profile`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ height, weight })
+        });
+        
+        const json = await res.json();
+        
+        if (json.success) {
+            console.log('✅ 身高體重已儲存');
+            
+            // 更新前端資料
+            currentUser.height = height;
+            currentUser.weight = weight;
+            
+            // 更新顯示
+            updateProfileUI();
+            
+            // 關閉彈窗
+            closeEditProfileModal();
+            
+            alert('✅ 身高體重已更新！');
+        } else {
+            alert('儲存失敗: ' + (json.message || '未知錯誤'));
+        }
+    } catch (err) {
+        console.error('❌ 儲存錯誤:', err);
+        alert('連線錯誤: ' + err.message);
+    }
 }
 
 function generateAvatarGrid() {
