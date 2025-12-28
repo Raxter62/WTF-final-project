@@ -16,7 +16,6 @@ const SPORT_ICONS = {
 document.addEventListener('DOMContentLoaded', () => {
     checkLogin();
     setupForms();
-    setupForms();
     generateAvatarGrid();
     setupCoachInteraction();
 
@@ -38,17 +37,52 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // --- Auth ---
 async function checkLogin() {
+    displayAuthMessage('');
     try {
         const res = await fetch(`${API_URL}?action=get_user_info`, { credentials: 'same-origin' });
+
+        if (!res.ok) {
+            const message = await extractErrorMessage(res, '伺服器回應錯誤，請稍後再試');
+            displayAuthMessage(message);
+            showLogin();
+            return;
+        }
+
         const json = await res.json();
 
         if (json.success && json.data) {
             currentUser = json.data;
             showDashboard();
         } else {
+            displayAuthMessage(json.message || '請先登入');
             showLogin();
         }
-    } catch (e) { showLogin(); }
+    } catch (e) {
+        console.error('checkLogin error:', e);
+        displayAuthMessage('無法連線伺服器，請稍後再試');
+        showLogin();
+    }
+}
+
+function displayAuthMessage(message) {
+    const el = document.getElementById('auth-msg');
+    if (!el) return;
+    el.textContent = message || '';
+    el.style.display = message ? 'block' : 'none';
+}
+
+async function extractErrorMessage(response, fallback) {
+    try {
+        const text = await response.text();
+        try {
+            const parsed = JSON.parse(text);
+            if (parsed && parsed.message) return parsed.message;
+        } catch (_) { /* ignore parse error */ }
+        return text || fallback;
+    } catch (err) {
+        console.warn('Failed to read error response', err);
+        return fallback;
+    }
 }
 
 function showLogin() {
@@ -79,6 +113,8 @@ function showDashboard() {
     } else {
         avatarImg.src = defaultAvatar;
     }
+
+    generateAvatarGrid();
 
     // 初始載入圖表
     setGlobalRange('1d');
@@ -266,6 +302,9 @@ function generateAvatarGrid() {
     }
     grid.innerHTML = '';
 
+    const userKey = currentUser ? `avatar_${currentUser.id}` : 'avatar_guest';
+    const avatarImg = document.getElementById('current-avatar');
+
     // 使用 1.png 到 11.png
     const avatarCount = 11;
     for (let i = 1; i <= avatarCount; i++) {
@@ -281,8 +320,8 @@ function generateAvatarGrid() {
         img.style.border = '2px solid #eee';
 
         img.onclick = () => {
-            document.getElementById('current-avatar').src = imgPath;
-            // 簡單起見，這裡不存 LocalStorage，實際專案應該要存
+            if (avatarImg) avatarImg.src = imgPath;
+            localStorage.setItem(userKey, imgPath);
             closeModal('avatarModal');
         };
         grid.appendChild(img);
