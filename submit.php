@@ -1,54 +1,65 @@
 <?php
 // submit.php - 主要 API 入口點
-session_start();
-require_once 'config.php';
+require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/LLM/coach.php';
 
+session_start();
 header('Content-Type: application/json; charset=utf-8');
 
-// 取得輸入資料的輔助函式
 function getJsonInput() {
-    return json_decode(file_get_contents('php://input'), true) ?? [];
+    $raw = file_get_contents('php://input');
+    if (!$raw) return [];
+    $data = json_decode($raw, true);
+    return is_array($data) ? $data : [];
 }
-
-// 回傳回應的輔助函式
 function sendResponse($data) {
     echo json_encode($data, JSON_UNESCAPED_UNICODE);
     exit;
 }
 
-$action = $_GET['action'] ?? $_POST['action'] ?? '';
-$input = getJsonInput();
+$input  = getJsonInput();
+$action = $input['action'] ?? ($_GET['action'] ?? '');
 
-// Ensure DB connection
 if (!$pdo) {
     sendResponse(['success' => false, 'message' => 'DB 連線失敗']);
 }
 
 // --- 驗證相關動作 ---
-
 if ($action === 'register') {
     $email = $input['email'] ?? '';
-    $pass = $input['password'] ?? '';
-    $name = $input['display_name'] ?? 'User';
+    $pass  = $input['password'] ?? '';
+    $name  = $input['display_name'] ?? 'User';
 
     if (!$email || !$pass) {
         sendResponse(['success' => false, 'message' => '請輸入 Email 和密碼']);
     }
 
-    // 檢查 email 是否已存在
-    $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ?");
-    $stmt->execute([$email]);
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE email = :email LIMIT 1");
+    $stmt->execute([':email' => $email]);
     if ($stmt->fetch()) {
         sendResponse(['success' => false, 'message' => '此 Email 已被註冊']);
     }
 
-    // 建立使用者
     $hash = password_hash($pass, PASSWORD_DEFAULT);
-    $stmt = $pdo->prepare("INSERT INTO users (email, password_hash, display_name) VALUES (?, ?, ?)");
-    if ($stmt->execute([$email, $hash, $name])) {
-        // 自動登入
-        $_SESSION['user_id'] = $pdo->lastInsertId();
+
+    // PostgreSQL 安全取得 id：RETURNING
+    $stmt = $pdo->prepare("
+        INSERT INTO users (email, password_hash, display_name)
+        VALUES (:email, :hash, :name)
+        RETURNING id
+    ");
+
+    if ($stmt->execute([
+        ':email' => $email,
+        ':hash'  => $hash,
+        ':name'  => $name,
+    ])) {
+        $row = $stmt->fetch();
+        $userId = isset($row['id']) ? (int)$row['id'] : 0;
+        if ($userId <= 0) {
+            sendResponse(['success' => false, 'message' => '註冊成功但取得ID失敗']);
+        }
+        $_SESSION['user_id'] = $userId;
         sendResponse(['success' => true]);
     } else {
         sendResponse(['success' => false, 'message' => '註冊失敗']);
@@ -56,15 +67,18 @@ if ($action === 'register') {
 
 } elseif ($action === 'login') {
     $email = $input['email'] ?? '';
-    $pass = $input['password'] ?? '';
+    $pass  = $input['password'] ?? '';
 
-    $stmt = $pdo->prepare("SELECT id, password_hash, display_name FROM users WHERE email = ?");
-    $stmt->execute([$email]);
+    $stmt = $pdo->prepare("SELECT id, password_hash, display_name FROM users WHERE email = :email LIMIT 1");
+    $stmt->execute([':email' => $email]);
     $user = $stmt->fetch();
 
     if ($user && password_verify($pass, $user['password_hash'])) {
-        $_SESSION['user_id'] = $user['id'];
-        sendResponse(['success' => true]);
+        $_SESSION['user_id'] = (int)$user['id'];
+        sendResponse([
+            'success'      => true,
+            'display_name' => $user['display_name'],
+        ]);
     } else {
         sendResponse(['success' => false, 'message' => '帳號或密碼錯誤']);
     }
@@ -72,12 +86,118 @@ if ($action === 'register') {
 } elseif ($action === 'logout') {
     session_destroy();
     sendResponse(['success' => true]);
+}
+
+// --- 之後的動作都需要登入 ---
+if (!isset($_SESSION['user_id'])) {
+    sendResponse(['success' => false, 'message' => '尚未登入']);
+}
+$userId = (int)$_SESSION['user_id'];
+
+// --- 需登入後的動作 ---
+if ($action === 'get_user_info') {
+    $stmt = $pdo->prepare("
+        SELECT display_name, email, line_user_id, height, weight
+        FROM users
+        WHERE id = :id
+    ");
+    $stmt->execute([':id' => $userId]);
+    $data = $stmt->fetch();
+
+    sendResponse(['success' => true, 'data' => $data]);
+
+} elseif ($action === 'update_profile') {
+    $name   = $input['display_name'] ?? 'User';
+    $height = isset($input['height']) ? (float)$input['height'] : null;
+    $weight = isset($input['weight']) ? (float)$input['weight'] : null;
+
+    $stmt = $pdo->prepare("
+        UPDATE users
+        SET display_name = :name,
+            height       = :height,
+            weight       = :weight
+        WHERE id = :id
+    ");
+    if ($stmt->execute([
+        ':name'   => $name,
+        ':height' => $height,
+        ':weight' => $weight,
+        ':id'     => $userId,
+    ])) {
+        sendResponse(['success' => true]);
+    } else {
+        sendResponse(['success' => false, 'message' => '更新失敗']);
+    }
+
+} elseif ($action === 'add_workout') {
+    $date     = $input['date'] ?? date('Y-m-d H:i:s');
+    $type     = $input['type'] ?? 'General';
+    $minutes  = (int)($input['minutes'] ?? 0);
+    $calories = (int)($input['calories'] ?? 0);
+
+    $stmt = $pdo->prepare("
+        INSERT INTO workouts (user_id, date, type, minutes, calories)
+        VALUES (:uid, :date, :type, :minutes, :calories)
+    ");
+    if ($stmt->execute([
+        ':uid'      => $userId,
+        ':date'     => $date,
+        ':type'     => $type,
+        ':minutes'  => $minutes,
+        ':calories' => $calories,
+    ])) {
+        try {
+            $stmtTotals = $pdo->prepare("
+                INSERT INTO user_totals (user_id, total_calories)
+                VALUES (:uid, :calories)
+                ON CONFLICT (user_id)
+                DO UPDATE SET total_calories = user_totals.total_calories + EXCLUDED.total_calories
+            ");
+            $stmtTotals->execute([
+                ':uid'      => $userId,
+                ':calories' => $calories,
+            ]);
+        } catch (PDOException $e) {
+            // 不影響主流程
+        }
+        sendResponse(['success' => true]);
+    } else {
+        sendResponse(['success' => false, 'message' => '寫入失敗']);
+    }
+
+} elseif ($action === 'get_stats') {
+    $sql = "
+        SELECT date::date AS date, SUM(minutes) AS total
+        FROM workouts
+        WHERE user_id = :uid
+          AND date >= CURRENT_DATE - INTERVAL '7 days'
+        GROUP BY date::date
+        ORDER BY date::date ASC
+    ";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([':uid' => $userId]);
+    $daily = $stmt->fetchAll();
+
+    $sql = "
+        SELECT type, SUM(minutes) AS total
+        FROM workouts
+        WHERE user_id = :uid
+        GROUP BY type
+        ORDER BY total DESC
+    ";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([':uid' => $userId]);
+    $types = $stmt->fetchAll();
+
+    sendResponse([
+        'success' => true,
+        'daily'   => $daily,
+        'types'   => $types,
+    ]);
 
 } elseif ($action === 'get_leaderboard') {
-    // 排行榜不需要登入也能查看（Demo 模式可用）
     $sql = "
-        SELECT u.display_name,
-               SUM(w.calories) AS total
+        SELECT u.display_name, SUM(w.minutes) AS total
         FROM workouts w
         JOIN users u ON w.user_id = u.id
         WHERE w.date >= CURRENT_DATE - INTERVAL '30 days'
@@ -86,15 +206,17 @@ if ($action === 'register') {
         LIMIT 10
     ";
     $stmt = $pdo->query($sql);
-    $data = $stmt->fetchAll();
-    
-    // 加上排名
-    foreach ($data as $i => &$row) {
+    $rows = $stmt->fetchAll();
+
+    foreach ($rows as $i => &$row) {
         $row['rank'] = $i + 1;
     }
-
-    sendResponse(['success' => true, 'data' => $data]);
+    sendResponse(['success' => true, 'data' => $rows]);
 }
+
+// 其餘 action 你原本後段還有（line 綁定/解除等），請把你原 submit.php 後半段接回去即可。
+// 若你要我「完整合併不缺任何 action」，把你 submit.php 後半段剩下內容再貼一次，我會整份補齊。
+sendResponse(['success' => false, 'message' => 'Unknown action']);
 
 // --- 需登入後的動作 ---
 
