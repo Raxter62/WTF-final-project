@@ -1,55 +1,33 @@
 <?php
-// config.php - 資料庫連線與全域設定
+// config.php - 直接指定連線參數（避免 parse_url 解析錯誤）
 
-// 1. 從環境變數取得 DATABASE_URL
-$databaseUrl = getenv('DATABASE_URL');
+// ========== 直接設定連線參數 ==========
+$db_type = 'pgsql';
+$db_host = 'aws-1-ap-northeast-1.pooler.supabase.com';
+$db_port = 5432;
+$db_name = 'postgres';
+$db_user = 'postgres.gyxzbbedauyglqskcsqk';  // 注意：包含專案 ID
+$db_pass = 'bkeqYKv$9@IOGkBt';                // 原始密碼（不編碼）
+
+// ========== 建立連線 ==========
 $pdo = null;
 
-if ($databaseUrl) {
-    // 解析 URL (例如 mysql://user:pass@host:port/dbname)
-    $dbConfig = parse_url($databaseUrl);
+try {
+    $dsn = "$db_type:host=$db_host;port=$db_port;dbname=$db_name";
+    $pdo = new PDO($dsn, $db_user, $db_pass);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
     
-    $scheme = $dbConfig['scheme'] ?? 'mysql';
-    $host = $dbConfig['host'] ?? 'localhost';
-    $port = $dbConfig['port'] ?? '';
-    $user = $dbConfig['user'] ?? '';
-    $pass = $dbConfig['pass'] ?? '';
-    $path = ltrim($dbConfig['path'] ?? '', '/'); // 移除開頭的斜線
-    $query  = $dbConfig['query'] ?? '';
-            
-    // 把 query 轉成 ;key=value 形式，丟進 DSN
-    $extraDsn = '';
-    if ($query) {
-        // sslmode=require&application_name=xxx => ;sslmode=require;application_name=xxx
-        $extraDsn = ';' . str_replace('&', ';', $query);
-    }
-
-    try {
-        if (strpos($scheme, 'postgres') !== false) {
-            // PostgreSQL
-            $port = $port ?: 5432;
-            $dsn = "pgsql:host=$host;port=$port;dbname=$path{$extraDsn}";
-        } else {
-            // MySQL
-            $port = $port ?: 3306;
-            $dsn = "mysql:host=$host;port=$port;dbname=$path;charset=utf8mb4";
-        }
-
-        $pdo = new PDO($dsn, $user, $pass);
-        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
-
-    } catch (PDOException $e) {
-        // 輸出錯誤並停止
-        die("DB connection failed: " . $e->getMessage());
-    }
-} else {
-    // 若沒有 DATABASE_URL 的備案或錯誤 (本地測試若無環境變數，可在此寫死或略過)
-    // die("DATABASE_URL environment variable not set.");
+    // 連線成功（開發時可取消註解）
+    // echo "✅ 資料庫連線成功\n";
+    
+} catch (PDOException $e) {
+    error_log("DB connection failed: " . $e->getMessage());
+    die("資料庫連線失敗: " . $e->getMessage() . "\n");
 }
 
-// 2. 定義 API Keys 為常數
-define('OPENAI_API_KEY', getenv('OPENAI_API_KEY'));
-define('LINE_CHANNEL_SECRET', getenv('LINE_CHANNEL_SECRET'));
-define('LINE_CHANNEL_TOKEN', getenv('LINE_CHANNEL_TOKEN'));
-define('RESEND_API_KEY', getenv('RESEND_API_KEY'));
+// ========== API Keys 常數 ==========
+define('OPENAI_API_KEY', getenv('OPENAI_API_KEY') ?: '');
+define('LINE_CHANNEL_SECRET', getenv('LINE_CHANNEL_SECRET') ?: '');
+define('LINE_CHANNEL_TOKEN', getenv('LINE_CHANNEL_TOKEN') ?: '');
+define('RESEND_API_KEY', getenv('RESEND_API_KEY') ?: '');

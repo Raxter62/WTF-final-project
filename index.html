@@ -7,7 +7,232 @@
     <title>FitConnect 運動平台</title>
     <link rel="manifest" href="manifest.json">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <link rel="stylesheet" href="public/css/style.css">
+    <style>
+        /* 表單容器整體動畫 */
+        #login-form,
+        #register-form {
+            transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+                        transform 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+                        filter 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+            transform-origin: center;
+            will-change: opacity, transform;
+        }
+
+        /* 隱藏狀態 - 離開動畫 */
+        #login-form.hidden,
+        #register-form.hidden {
+            opacity: 0;
+            transform: translateX(-40px) scale(0.92) rotateX(5deg);
+            filter: blur(4px);
+            pointer-events: none;
+            position: absolute;
+            width: calc(100% - 60px);
+            left: 30px;
+        }
+
+        /* 顯示狀態 - 進入動畫 */
+        #login-form:not(.hidden),
+        #register-form:not(.hidden) {
+            opacity: 1;
+            transform: translateX(0) scale(1) rotateX(0deg);
+            filter: blur(0);
+            pointer-events: auto;
+            position: relative;
+            animation: slideInSmooth 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* 表單欄位逐個淡入動畫 */
+        @keyframes slideInSmooth {
+            0% {
+                opacity: 0;
+                transform: translateX(40px) scale(0.92);
+                filter: blur(4px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateX(0) scale(1);
+                filter: blur(0);
+            }
+        }
+
+        /* 表單內每個欄位的延遲動畫 */
+        .form-label,
+        .form-control,
+        .btn-primary {
+            animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+        }
+
+        #login-form:not(.hidden) .form-label:nth-of-type(1),
+        #login-form:not(.hidden) .form-control:nth-of-type(1) {
+            animation-delay: 0.05s;
+        }
+
+        #login-form:not(.hidden) .form-label:nth-of-type(2),
+        #login-form:not(.hidden) .form-control:nth-of-type(2) {
+            animation-delay: 0.1s;
+        }
+
+        #login-form:not(.hidden) .btn-primary,
+        #register-form:not(.hidden) .btn-primary {
+            animation-delay: 0.15s;
+        }
+
+        #register-form:not(.hidden) .form-label:nth-of-type(1),
+        #register-form:not(.hidden) .form-control:nth-of-type(1) {
+            animation-delay: 0.05s;
+        }
+
+        #register-form:not(.hidden) .form-label:nth-of-type(2),
+        #register-form:not(.hidden) .form-control:nth-of-type(2) {
+            animation-delay: 0.1s;
+        }
+
+        #register-form:not(.hidden) .form-label:nth-of-type(3),
+        #register-form:not(.hidden) .form-control:nth-of-type(3) {
+            animation-delay: 0.15s;
+        }
+
+        @keyframes fadeInUp {
+            0% {
+                opacity: 0;
+                transform: translateY(15px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Tab 按鈕動畫 */
+        .tab-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 2rem;
+            position: relative;
+        }
+
+        .tab-btn {
+            padding: 0.5rem 1.5rem;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            border: none;
+            cursor: pointer;
+        }
+
+        .tab-btn:not(.active) {
+            background: #f5f5f5 !important;
+            color: #666 !important;
+            box-shadow: none !important;
+        }
+
+        .tab-btn:not(.active):hover {
+            background: #e8e8e8 !important;
+            transform: translateY(-3px);
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1) !important;
+        }
+
+        .tab-btn.active {
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.35) !important;
+        }
+
+        .tab-btn:active {
+            transform: translateY(-1px) scale(1.02);
+            transition: all 0.1s ease;
+        }
+
+        /* 所有按鈕 hover 效果 */
+        .btn-primary {
+            transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:active {
+            transform: translateY(-1px) scale(1);
+            box-shadow: 0 3px 10px rgba(102, 126, 234, 0.3);
+            transition: all 0.1s ease;
+        }
+
+        /* 輸入框效果 */
+        .form-control {
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .form-control:focus {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+        }
+
+        .auth-card {
+            padding-bottom: 1.5rem !important;
+        }
+
+        #auth-msg {
+            margin-top: 0.5rem !important;
+            transition: all 0.3s ease;
+        }
+
+        /* 頭像動畫 */
+        .avatar-img {
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            will-change: opacity, transform;
+        }
+
+        .avatar-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+
+        .avatar-arrow {
+            cursor: pointer;
+            font-size: 2rem;
+            color: rgba(255, 255, 255, 0.8);
+            user-select: none;
+            transition: all 0.2s ease;
+            padding: 0.5rem;
+        }
+
+        .avatar-arrow:hover {
+            color: rgba(255, 255, 255, 1);
+            transform: scale(1.2);
+        }
+
+        .avatar-arrow:active {
+            transform: scale(0.9);
+        }
+
+        /* 綁定碼動畫 */
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.05);
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        #bind-code-display {
+            animation: fadeInUp 0.5s ease-out;
+        }
+    </style>
 </head>
 
 <body>
@@ -36,33 +261,34 @@
                 <img src="public/image/logo/logoremovebg.png" alt="Logo" style="height: 60px; width: auto;">
                 FitConnect
             </h1>
-            <div style="display: flex; justify-content: center; gap: 10px; margin-bottom: 2rem;">
-                <button class="btn-primary" style="padding: 0.5rem 1.5rem;" onclick="switchTab('login')">登入</button>
-                <button class="btn-primary"
-                    style="padding: 0.5rem 1.5rem; background: #eee; color: #333; box-shadow: none;"
-                    onclick="switchTab('register')">註冊</button>
+            <div class="tab-buttons">
+                <button class="btn-primary tab-btn active" id="tab-login" onclick="switchTab('login')">登入</button>
+                <button class="btn-primary tab-btn" id="tab-register" onclick="switchTab('register')">註冊</button>
             </div>
 
-            <form id="login-form">
-                <label class="form-label">Email</label>
-                <input type="email" class="form-control" name="email" required>
-                <label class="form-label">密碼</label>
-                <input type="password" class="form-control" name="password" required>
-                <button type="submit" class="btn-primary" style="width: 100%;">登入</button>
-                <p style="text-align: center; margin-top: 1rem; cursor: pointer; color: #999;" onclick="demoLogin()">
-                    Demo 模式登入</p>
-            </form>
+            <div style="position: relative; min-height: 240px;">
+                <form id="login-form">
+                    <label class="form-label">Email</label>
+                    <input type="email" id="login-email" class="form-control" name="email" required>
+                    <label class="form-label">密碼</label>
+                    <input type="password" id="login-password" class="form-control" name="password" required>
+                    <button type="submit" class="btn-primary" style="width: 100%; margin-top: 0.5rem;">登入</button>
+                    <p style="text-align: center; margin-top: 1rem; cursor: pointer; color: #999; font-size: 0.9rem;" onclick="demoLogin()">
+                        Demo 模式登入
+                    </p>
+                </form>
 
-            <form id="register-form" class="hidden">
-                <label class="form-label">暱稱</label>
-                <input type="text" class="form-control" name="display_name" required>
-                <label class="form-label">Email</label>
-                <input type="email" class="form-control" name="email" required>
-                <label class="form-label">密碼</label>
-                <input type="password" class="form-control" name="password" required>
-                <button type="submit" class="btn-primary" style="width: 100%;">註冊</button>
-            </form>
-            <div id="auth-msg" style="text-align: center; margin-top: 10px; color: red;"></div>
+                <form id="register-form" class="hidden">
+                    <label class="form-label">暱稱</label>
+                    <input type="text" id="register-display-name" class="form-control" name="display_name" required>
+                    <label class="form-label">Email</label>
+                    <input type="email" id="register-email" class="form-control" name="email" required>
+                    <label class="form-label">密碼</label>
+                    <input type="password" id="register-password" class="form-control" name="password" required>
+                    <button type="submit" class="btn-primary" style="width: 100%; margin-top: 0.5rem;">註冊</button>
+                </form>
+            </div>
+            <div id="auth-msg" style="text-align: center; margin-top: 0.5rem; color: red;"></div>
         </div>
     </div>
 
@@ -237,6 +463,56 @@
                         <!-- JS Render -->
                     </tbody>
                 </table>
+            </div>
+
+            <!-- LINE 綁定區塊 -->
+            <div style="margin-top: 3rem; padding: 2rem; background: rgba(255,255,255,0.95); border-radius: 20px; backdrop-filter: blur(10px); border: 1px solid rgba(0,0,0,0.1); box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 1200px; margin-left: auto; margin-right: auto;">
+                <h3 style="margin: 0 0 1.5rem 0; color: #333; font-size: 1.5rem; display: flex; align-items: center; gap: 10px; font-weight: bold; justify-content: center;">
+                    <span style="font-size: 2rem;">📱</span> LINE 綁定
+                </h3>
+                <div id="line-bind-status">
+                    <!-- 未綁定狀態 -->
+                    <div id="not-bound">
+                        <p style="color: #555; margin-bottom: 1.5rem; font-size: 1rem; text-align: center;">綁定 LINE 後可接收運動提醒</p>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: start;">
+                            <!-- 左側：按鈕和說明 -->
+                            <div>
+                                <button onclick="generateBindCode()" class="btn-primary" style="width: 100%; margin-bottom: 1rem;">
+                                    產生綁定碼
+                                </button>
+                                <div style="background: rgba(102, 126, 234, 0.1); padding: 1.5rem; border-radius: 12px; border-left: 4px solid #667eea;">
+                                    <p style="color: #333; font-size: 0.95rem; margin: 0; line-height: 1.6;">
+                                        <strong style="color: #667eea;">📌 使用方式：</strong><br>
+                                        1️⃣ 點擊「產生綁定碼」按鈕<br>
+                                        2️⃣ 掃描 QR Code 或加入 LINE ID: <strong style="color: #667eea;">@063jezzz</strong><br>
+                                        3️⃣ 在 LINE Bot 中輸入綁定碼
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            <!-- 右側：QR Code 和綁定碼 -->
+                            <div id="bind-code-display" style="display: none; text-align: center;">
+                                <div style="background: #fff; padding: 2rem; border-radius: 10px; margin-bottom: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                                    <div id="qrcode" style="display: inline-block;"></div>
+                                </div>
+                                <div style="background: #667eea; padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem; border: 2px solid rgba(255,255,255,0.3);">
+                                    <p style="color: #fff; margin: 0 0 0.5rem 0; font-size: 1rem; font-weight: bold;">綁定碼（10分鐘內有效）</p>
+                                    <p id="bind-code-text" style="color: #feca57; font-size: 2.5rem; font-weight: bold; margin: 0; letter-spacing: 5px; text-shadow: 0 2px 4px rgba(0,0,0,0.3);">------</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 已綁定狀態 -->
+                    <div id="already-bound" style="display: none; text-align: center;">
+                        <p style="color: #22c55e; margin-bottom: 1rem; display: flex; align-items: center; gap: 8px; font-size: 1.1rem; font-weight: bold; justify-content: center;">
+                            <span style="font-size: 1.3rem;">✓</span> 已綁定 LINE
+                        </p>
+                        <button onclick="unbindLine()" class="btn-primary" style="width: 50%; background: #ef4444;">
+                            解除綁定
+                        </button>
+                    </div>
+                </div>
             </div>
         </section>
 

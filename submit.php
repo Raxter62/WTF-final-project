@@ -1,8 +1,8 @@
 <?php
 // submit.php - 主要 API 入口點
+session_start();
 require_once 'config.php';
 require_once __DIR__ . '/LLM/coach.php';
-session_start();
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -72,6 +72,28 @@ if ($action === 'register') {
 } elseif ($action === 'logout') {
     session_destroy();
     sendResponse(['success' => true]);
+
+} elseif ($action === 'get_leaderboard') {
+    // 排行榜不需要登入也能查看（Demo 模式可用）
+    $sql = "
+        SELECT u.display_name,
+               SUM(w.calories) AS total
+        FROM workouts w
+        JOIN users u ON w.user_id = u.id
+        WHERE w.date >= CURRENT_DATE - INTERVAL '30 days'
+        GROUP BY u.id, u.display_name
+        ORDER BY total DESC
+        LIMIT 10
+    ";
+    $stmt = $pdo->query($sql);
+    $data = $stmt->fetchAll();
+    
+    // 加上排名
+    foreach ($data as $i => &$row) {
+        $row['rank'] = $i + 1;
+    }
+
+    sendResponse(['success' => true, 'data' => $data]);
 }
 
 // --- 需登入後的動作 ---
@@ -83,7 +105,7 @@ if (!isset($_SESSION['user_id'])) {
 $userId = $_SESSION['user_id'];
 
 if ($action === 'get_user_info') {
-    $stmt = $pdo->prepare("SELECT display_name, email, line_user_id FROM users WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT id, display_name, email, line_user_id, avatar_id FROM users WHERE id = ?");
     $stmt->execute([$userId]);
     $data = $stmt->fetch();
     sendResponse(['success' => true, 'data' => $data]);
@@ -103,53 +125,110 @@ if ($action === 'get_user_info') {
     }
 
 } elseif ($action === 'get_stats') {
-    // 1. 最近 7 天的每日分鐘數（使用 Postgres 語法）
-    $sql = "
-        SELECT date, SUM(minutes) AS total
-        FROM workouts
-        WHERE user_id = :uid
-          AND date >= CURRENT_DATE - INTERVAL '7 days'
-        GROUP BY date
-        ORDER BY date ASC
-    ";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([':uid' => $userId]);
-    $daily = $stmt->fetchAll();
+    // 取得時間範圍參數，預設 1d
+    $range = $_GET['range'] ?? '1d';
+    
+    $daily = [];
+    $types = [];
+    
+    if ($range === '1d') {
+        // 1天：按天分組（所有紀錄）
+        $sql = "
+            SELECT DATE(date) as date, SUM(minutes) AS total
+            FROM workouts
+            WHERE user_id = :uid
+            GROUP BY DATE(date)
+            ORDER BY DATE(date) ASC
+        ";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([':uid' => $userId]);
+        $daily = $stmt->fetchAll();
+        
+    } elseif ($range === '1wk') {
+        // 1周：按週分組（所有紀錄）
+        $sql = "
+            SELECT 
+                DATE_TRUNC('week', date) as week_start,
+                SUM(minutes) AS total
+            FROM workouts
+            WHERE user_id = :uid
+            GROUP BY DATE_TRUNC('week', date)
+            ORDER BY week_start ASC
+        ";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([':uid' => $userId]);
+        $weeklyData = $stmt->fetchAll();
+        
+        // 格式化週標籤
+        foreach ($weeklyData as $row) {
+            $daily[] = [
+                'date' => date('Y-m-d', strtotime($row['week_start'])),
+                'total' => (int)$row['total']
+            ];
+        }
+        
+    } elseif ($range === '1m') {
+        // 1月：按月分組（所有紀錄）
+        $sql = "
+            SELECT 
+                DATE_TRUNC('month', date) as month_start,
+                SUM(minutes) AS total
+            FROM workouts
+            WHERE user_id = :uid
+            GROUP BY DATE_TRUNC('month', date)
+            ORDER BY month_start ASC
+        ";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([':uid' => $userId]);
+        $monthlyData = $stmt->fetchAll();
+        
+        // 格式化月標籤
+        foreach ($monthlyData as $row) {
+            $daily[] = [
+                'date' => date('Y-m', strtotime($row['month_start'])),
+                'total' => (int)$row['total']
+            ];
+        }
+        
+    } elseif ($range === '3m') {
+        // 3月：按季分組（所有紀錄）
+        $sql = "
+            SELECT 
+                DATE_TRUNC('quarter', date) as quarter_start,
+                SUM(minutes) AS total
+            FROM workouts
+            WHERE user_id = :uid
+            GROUP BY DATE_TRUNC('quarter', date)
+            ORDER BY quarter_start ASC
+        ";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([':uid' => $userId]);
+        $quarterlyData = $stmt->fetchAll();
+        
+        // 格式化季標籤
+        foreach ($quarterlyData as $row) {
+            $date = new DateTime($row['quarter_start']);
+            $quarter = ceil(($date->format('n')) / 3);
+            $daily[] = [
+                'date' => $date->format('Y') . 'Q' . $quarter,
+                'total' => (int)$row['total']
+            ];
+        }
+    }
 
-    // 2. 運動類型分佈
+    // 2. 運動類型分佈（所有紀錄）
     $sql = "
         SELECT type, SUM(minutes) AS total
         FROM workouts
         WHERE user_id = :uid
         GROUP BY type
+        ORDER BY total DESC
     ";
     $stmt = $pdo->prepare($sql);
     $stmt->execute([':uid' => $userId]);
     $types = $stmt->fetchAll();
 
-    sendResponse(['success' => true, 'daily' => $daily, 'types' => $types]);
-
-} elseif ($action === 'get_leaderboard') {
-    // 取出最近 30 天運動總分鐘數的前 10 名（Postgres 語法）
-    $sql = "
-        SELECT u.display_name,
-               SUM(w.minutes) AS total
-        FROM workouts w
-        JOIN users u ON w.user_id = u.id
-        WHERE w.date >= CURRENT_DATE - INTERVAL '30 days'
-        GROUP BY u.id, u.display_name
-        ORDER BY total DESC
-        LIMIT 10
-    ";
-    $stmt = $pdo->query($sql);
-    $data = $stmt->fetchAll();
-    
-    // 加上排名
-    foreach ($data as $i => &$row) {
-        $row['rank'] = $i + 1;
-    }
-
-    sendResponse(['success' => true, 'data' => $data]);
+    sendResponse(['success' => true, 'daily' => $daily, 'types' => $types, 'range' => $range]);
 
 } elseif ($action === 'generate_bind_code') {
     $code = str_pad(mt_rand(100000, 999999), 6, '0', STR_PAD_LEFT);
@@ -190,6 +269,26 @@ if ($action === 'get_user_info') {
 
     $reply = askCoach($historyText, $msg);
     sendResponse(['success' => true, 'reply' => $reply]);
+
+} elseif ($action === 'update_avatar') {
+    // 更新用戶頭像
+    $avatar_id = $input['avatar_id'] ?? 1;
+    
+    // 驗證 avatar_id 範圍 (1-11)
+    if ($avatar_id < 1 || $avatar_id > 11) {
+        sendResponse(['success' => false, 'message' => 'invalid_avatar_id']);
+    }
+    
+    // 更新資料庫
+    $sql = "UPDATE users SET avatar_id = ? WHERE id = ?";
+    $stmt = $pdo->prepare($sql);
+    $result = $stmt->execute([$avatar_id, $userId]);
+    
+    if ($result) {
+        sendResponse(['success' => true, 'avatar_id' => $avatar_id]);
+    } else {
+        sendResponse(['success' => false, 'message' => 'update_failed']);
+    }
 
 } else {
     sendResponse(['success' => false, 'message' => 'Unknown action: ' . htmlspecialchars($action)]);
