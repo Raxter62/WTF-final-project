@@ -10,6 +10,11 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="public/css/style.css">
     <style>
+        /* ===== 確保 hidden class 正常運作 ===== */
+        .hidden {
+            display: none !important;
+        }
+        
         /* 表單容器整體動畫 */
         #login-form,
         #register-form {
@@ -618,6 +623,36 @@
         <!-- ✅ cache bust：立刻繞過舊 SW 快取的 main.js -->
         <script src="public/js/main.js?v=20251228_1"></script>
         
+        <!-- 🛡️ 強制初始狀態：確保顯示登入頁面 -->
+        <script>
+        (function() {
+            console.log('🛡️ 設定初始狀態：顯示登入頁面');
+            
+            // 強制顯示登入頁面
+            const authView = document.getElementById('auth-view');
+            if (authView) {
+                authView.classList.remove('hidden');
+                console.log('✅ 登入頁面已顯示');
+            }
+            
+            // 強制隱藏儀表板
+            const dashboardView = document.getElementById('dashboard-view');
+            if (dashboardView) {
+                dashboardView.classList.add('hidden');
+                console.log('✅ 儀表板已隱藏');
+            }
+            
+            // 隱藏 AI Coach
+            const coachContainer = document.getElementById('ai-coach-container');
+            if (coachContainer) {
+                coachContainer.classList.add('hidden');
+            }
+            
+            console.log('✅ 初始狀態設定完成');
+            console.log('⏳ main.js 的 checkLogin() 將會根據 Session 決定是否自動登入');
+        })();
+        </script>
+        
         <!-- 🔧 緊急修復腳本：確保表單綁定 -->
         <script>
         (function() {
@@ -651,7 +686,7 @@
                                 headers: { 'Content-Type': 'application/json' },
                                 credentials: 'same-origin',
                                 body: JSON.stringify({ 
-                                    action: 'login',  // 加入 action
+                                    action: 'login',
                                     email, 
                                     password 
                                 })
@@ -701,7 +736,7 @@
                                 headers: { 'Content-Type': 'application/json' },
                                 credentials: 'same-origin',
                                 body: JSON.stringify({ 
-                                    action: 'register',  // 加入 action
+                                    action: 'register',
                                     display_name, 
                                     email, 
                                     password 
