@@ -10,6 +10,21 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="public/css/style.css">
     <style>
+        /* ===== 確保 hidden 正確運作 ===== */
+        .hidden {
+            display: none !important;
+        }
+        
+        /* 確保登入頁面初始顯示 */
+        #auth-view {
+            display: block;
+        }
+        
+        /* 確保儀表板初始隱藏 */
+        #dashboard-view.hidden {
+            display: none;
+        }
+        
         /* 表單容器整體動畫 */
         #login-form,
         #register-form {
@@ -618,6 +633,38 @@
         <!-- ✅ cache bust：立刻繞過舊 SW 快取的 main.js -->
         <script src="public/js/main.js?v=20251228_1"></script>
         
+        <!-- 🛡️ 初始狀態強制設定：確保一開始顯示登入頁面 -->
+        <script>
+        (function() {
+            console.log('🛡️ 設定初始狀態：顯示登入頁面');
+            
+            // 確保登入頁面顯示
+            const authView = document.getElementById('auth-view');
+            if (authView) {
+                authView.classList.remove('hidden');
+                authView.style.display = 'block';
+                console.log('✅ 登入頁面已顯示');
+            }
+            
+            // 確保儀表板隱藏
+            const dashboardView = document.getElementById('dashboard-view');
+            if (dashboardView) {
+                dashboardView.classList.add('hidden');
+                dashboardView.style.display = 'none';
+                console.log('✅ 儀表板已隱藏');
+            }
+            
+            // 隱藏 AI Coach 容器
+            const coachContainer = document.getElementById('ai-coach-container');
+            if (coachContainer) {
+                coachContainer.classList.add('hidden');
+                coachContainer.style.display = 'none';
+            }
+            
+            console.log('✅ 初始狀態設定完成');
+        })();
+        </script>
+        
         <!-- 🔧 緊急修復腳本 v2：修正 API 請求 -->
         <script>
         (function() {
@@ -680,8 +727,75 @@
                             console.log('📥 解析後:', json);
                             
                             if (json.success) {
-                                console.log('✅ 登入成功！重新載入...');
-                                setTimeout(() => location.reload(), 500);
+                                console.log('✅ 登入成功！顯示儀表板...');
+                                
+                                // 取得使用者資訊並顯示儀表板
+                                try {
+                                    const userRes = await fetch('submit.php?action=get_user_info', {
+                                        credentials: 'same-origin'
+                                    });
+                                    const userData = await userRes.json();
+                                    
+                                    if (userData.success && userData.data) {
+                                        console.log('✅ 取得使用者資訊:', userData.data);
+                                        
+                                        // 設定全域變數（如果 main.js 有定義）
+                                        if (typeof window.currentUser !== 'undefined') {
+                                            window.currentUser = userData.data;
+                                        }
+                                        
+                                        // 顯示儀表板
+                                        document.getElementById('auth-view').classList.add('hidden');
+                                        document.getElementById('dashboard-view').classList.remove('hidden');
+                                        
+                                        // 更新使用者名稱
+                                        const nameEl = document.getElementById('user-display-name');
+                                        if (nameEl) {
+                                            nameEl.textContent = userData.data.display_name;
+                                        }
+                                        
+                                        const profileNameEl = document.getElementById('profile-name');
+                                        if (profileNameEl) {
+                                            profileNameEl.textContent = userData.data.display_name;
+                                        }
+                                        
+                                        // 更新身高體重
+                                        const heightEl = document.getElementById('profile-height');
+                                        const weightEl = document.getElementById('profile-weight');
+                                        if (heightEl && userData.data.height) {
+                                            heightEl.textContent = userData.data.height;
+                                        }
+                                        if (weightEl && userData.data.weight) {
+                                            weightEl.textContent = userData.data.weight;
+                                        }
+                                        
+                                        // 顯示 AI Coach 容器
+                                        const coachEl = document.getElementById('ai-coach-container');
+                                        if (coachEl) {
+                                            coachEl.classList.remove('hidden');
+                                        }
+                                        
+                                        // 如果 main.js 有 showDashboard 函數，呼叫它
+                                        if (typeof window.showDashboard === 'function') {
+                                            window.showDashboard();
+                                        }
+                                        
+                                        // 如果 main.js 有 setGlobalRange 函數，載入統計資料
+                                        if (typeof window.setGlobalRange === 'function') {
+                                            window.setGlobalRange('1d');
+                                        }
+                                        
+                                        console.log('✅ 儀表板已顯示');
+                                    } else {
+                                        console.error('❌ 無法取得使用者資訊');
+                                        // 如果取得使用者資訊失敗，還是重新載入
+                                        setTimeout(() => location.reload(), 500);
+                                    }
+                                } catch (userError) {
+                                    console.error('❌ 取得使用者資訊錯誤:', userError);
+                                    // 發生錯誤就重新載入
+                                    setTimeout(() => location.reload(), 500);
+                                }
                             } else {
                                 console.error('❌ 登入失敗:', json.message);
                                 alert('登入失敗: ' + (json.message || '帳號或密碼錯誤'));
@@ -752,8 +866,53 @@
                             console.log('📥 解析後:', json);
                             
                             if (json.success) {
-                                console.log('✅ 註冊成功！重新載入...');
-                                setTimeout(() => location.reload(), 500);
+                                console.log('✅ 註冊成功！顯示儀表板...');
+                                
+                                // 取得使用者資訊並顯示儀表板
+                                try {
+                                    const userRes = await fetch('submit.php?action=get_user_info', {
+                                        credentials: 'same-origin'
+                                    });
+                                    const userData = await userRes.json();
+                                    
+                                    if (userData.success && userData.data) {
+                                        console.log('✅ 取得使用者資訊:', userData.data);
+                                        
+                                        // 設定全域變數
+                                        if (typeof window.currentUser !== 'undefined') {
+                                            window.currentUser = userData.data;
+                                        }
+                                        
+                                        // 顯示儀表板
+                                        document.getElementById('auth-view').classList.add('hidden');
+                                        document.getElementById('dashboard-view').classList.remove('hidden');
+                                        
+                                        // 更新使用者資訊
+                                        const nameEl = document.getElementById('user-display-name');
+                                        if (nameEl) nameEl.textContent = userData.data.display_name;
+                                        
+                                        const profileNameEl = document.getElementById('profile-name');
+                                        if (profileNameEl) profileNameEl.textContent = userData.data.display_name;
+                                        
+                                        const coachEl = document.getElementById('ai-coach-container');
+                                        if (coachEl) coachEl.classList.remove('hidden');
+                                        
+                                        if (typeof window.showDashboard === 'function') {
+                                            window.showDashboard();
+                                        }
+                                        
+                                        if (typeof window.setGlobalRange === 'function') {
+                                            window.setGlobalRange('1d');
+                                        }
+                                        
+                                        console.log('✅ 儀表板已顯示');
+                                    } else {
+                                        setTimeout(() => location.reload(), 500);
+                                    }
+                                } catch (userError) {
+                                    console.error('❌ 取得使用者資訊錯誤:', userError);
+                                    setTimeout(() => location.reload(), 500);
+                                }
                             } else {
                                 console.error('❌ 註冊失敗:', json.message);
                                 alert('註冊失敗: ' + (json.message || '未知錯誤'));
