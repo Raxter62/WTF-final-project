@@ -1,10 +1,81 @@
 <?php
 // submit.php - 主要 API 入口點
 require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/LLM/coach.php';
+
+/**
+ * AI Coach 模組（保留原功能）
+ * - 若 LLM/coach.php 存在，照原本使用 askCoach()
+ * - 若不存在，提供 fallback，避免整個 API 因 require fatal 而回傳 HTML（前端就會顯示「API 不是 JSON」）
+ */
+$coachPath = __DIR__ . '/LLM/coach.php';
+if (file_exists($coachPath)) {
+    require_once $coachPath;
+} else {
+    if (!function_exists('askCoach')) {
+        function askCoach(string $historyText, string $msg): string {
+            return "AI 教練模組尚未部署（缺少 LLM/coach.php）。請先把 LLM 資料夾部署到 Railway，或暫時關閉 AI 教練功能。";
+        }
+    }
+}
 
 session_start();
 header('Content-Type: application/json; charset=utf-8');
+
+/**
+ * JSON 錯誤保護：避免 PHP Warning/Fatal 直接輸出 HTML，導致前端 JSON.parse 失敗。
+ * 不改變原本功能，只是讓錯誤時也能維持 JSON 乾淨。
+ */
+ini_set('display_errors', '0');
+error_reporting(E_ALL);
+
+set_exception_handler(function ($e) {
+    if (!headers_sent()) {
+        header('Content-Type: application/json; charset=utf-8');
+        http_response_code(500);
+    }
+    echo json_encode([
+        'success' => false,
+        'message' => 'Server exception',
+        'error'   => $e->getMessage(),
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+});
+
+set_error_handler(function ($severity, $message, $file, $line) {
+    // 目的：不要讓 warning/notice 直接輸出到 HTTP body（會污染 JSON）
+    // 不改變原本流程：只記錄到 log，並抑制輸出。
+    if (!(error_reporting() & $severity)) return false;
+
+    $nonFatal = [
+        E_WARNING, E_NOTICE, E_USER_WARNING, E_USER_NOTICE,
+        E_DEPRECATED, E_USER_DEPRECATED, E_STRICT
+    ];
+
+    if (in_array($severity, $nonFatal, true)) {
+        error_log("[PHP] {$message} in {$file}:{$line}");
+        return true; // 已處理（抑制輸出）
+    }
+
+    // 其他較嚴重的錯誤交回 PHP 預設處理（通常會變成 fatal -> shutdown handler 會接住）
+    return false;
+});
+
+register_shutdown_function(function () {
+    $err = error_get_last();
+    if ($err && in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        if (!headers_sent()) {
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code(500);
+        }
+        echo json_encode([
+            'success' => false,
+            'message' => 'Server fatal error',
+            'error'   => $err['message'],
+            'where'   => basename($err['file']) . ':' . $err['line'],
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+});
 
 function getJsonInput() {
     $raw = file_get_contents('php://input');
@@ -97,7 +168,7 @@ $userId = (int)$_SESSION['user_id'];
 // --- 需登入後的動作 ---
 if ($action === 'get_user_info') {
     $stmt = $pdo->prepare("
-        SELECT display_name, email, line_user_id, height, weight
+        SELECT id, display_name, email, line_user_id, height, weight
         FROM users
         WHERE id = :id
     ");
@@ -212,203 +283,17 @@ if ($action === 'get_user_info') {
         $row['rank'] = $i + 1;
     }
     sendResponse(['success' => true, 'data' => $rows]);
-}
-
-sendResponse(['success' => false, 'message' => 'Unknown action']);
-
-// --- 需登入後的動作 ---
-
-// 檢查後續所有動作是否已登入
-if (!isset($_SESSION['user_id'])) {
-    sendResponse(['success' => false, 'message' => 'not_logged_in']);
-}
-$userId = $_SESSION['user_id'];
-
-if ($action === 'get_user_info') {
-    $stmt = $pdo->prepare("SELECT id, display_name, email, line_user_id, avatar_id FROM users WHERE id = ?");
-    $stmt->execute([$userId]);
-    $data = $stmt->fetch();
-    sendResponse(['success' => true, 'data' => $data]);
-
-} elseif ($action === 'add_workout') {
-    $date = $input['date'] ?? date('Y-m-d H:i:s');
-    $type = $input['type'] ?? 'General';
-    $minutes = (int) ($input['minutes'] ?? 0);
-    $calories = (int) ($input['calories'] ?? 0);
-
-    $stmt = $pdo->prepare("INSERT INTO workouts (user_id, date, type, minutes, calories) VALUES (?, ?, ?, ?, ?)");
-    if ($stmt->execute([$userId, $date, $type, $minutes, $calories])) {
-        // TODO: 在此檢查成就邏輯
-        sendResponse(['success' => true]);
-    } else {
-        sendResponse(['success' => false, 'message' => '寫入失敗']);
-    }
-
-} elseif ($action === 'get_stats') {
-    // 取得時間範圍參數，預設 1d
-    $range = $_GET['range'] ?? '1d';
-    
-    $daily = [];
-    $types = [];
-    
-    if ($range === '1d') {
-        // 1天：按天分組（所有紀錄）
-        $sql = "
-            SELECT DATE(date) as date, SUM(minutes) AS total
-            FROM workouts
-            WHERE user_id = :uid
-            GROUP BY DATE(date)
-            ORDER BY DATE(date) ASC
-        ";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute([':uid' => $userId]);
-        $daily = $stmt->fetchAll();
-        
-    } elseif ($range === '1wk') {
-        // 1周：按週分組（所有紀錄）
-        $sql = "
-            SELECT 
-                DATE_TRUNC('week', date) as week_start,
-                SUM(minutes) AS total
-            FROM workouts
-            WHERE user_id = :uid
-            GROUP BY DATE_TRUNC('week', date)
-            ORDER BY week_start ASC
-        ";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute([':uid' => $userId]);
-        $weeklyData = $stmt->fetchAll();
-        
-        // 格式化週標籤
-        foreach ($weeklyData as $row) {
-            $daily[] = [
-                'date' => date('Y-m-d', strtotime($row['week_start'])),
-                'total' => (int)$row['total']
-            ];
-        }
-        
-    } elseif ($range === '1m') {
-        // 1月：按月分組（所有紀錄）
-        $sql = "
-            SELECT 
-                DATE_TRUNC('month', date) as month_start,
-                SUM(minutes) AS total
-            FROM workouts
-            WHERE user_id = :uid
-            GROUP BY DATE_TRUNC('month', date)
-            ORDER BY month_start ASC
-        ";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute([':uid' => $userId]);
-        $monthlyData = $stmt->fetchAll();
-        
-        // 格式化月標籤
-        foreach ($monthlyData as $row) {
-            $daily[] = [
-                'date' => date('Y-m', strtotime($row['month_start'])),
-                'total' => (int)$row['total']
-            ];
-        }
-        
-    } elseif ($range === '3m') {
-        // 3月：按季分組（所有紀錄）
-        $sql = "
-            SELECT 
-                DATE_TRUNC('quarter', date) as quarter_start,
-                SUM(minutes) AS total
-            FROM workouts
-            WHERE user_id = :uid
-            GROUP BY DATE_TRUNC('quarter', date)
-            ORDER BY quarter_start ASC
-        ";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute([':uid' => $userId]);
-        $quarterlyData = $stmt->fetchAll();
-        
-        // 格式化季標籤
-        foreach ($quarterlyData as $row) {
-            $date = new DateTime($row['quarter_start']);
-            $quarter = ceil(($date->format('n')) / 3);
-            $daily[] = [
-                'date' => $date->format('Y') . 'Q' . $quarter,
-                'total' => (int)$row['total']
-            ];
-        }
-    }
-
-    // 2. 運動類型分佈（所有紀錄）
-    $sql = "
-        SELECT type, SUM(minutes) AS total
-        FROM workouts
-        WHERE user_id = :uid
-        GROUP BY type
-        ORDER BY total DESC
-    ";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([':uid' => $userId]);
-    $types = $stmt->fetchAll();
-
-    sendResponse(['success' => true, 'daily' => $daily, 'types' => $types, 'range' => $range]);
-
-} elseif ($action === 'generate_bind_code') {
-    $code = str_pad(mt_rand(100000, 999999), 6, '0', STR_PAD_LEFT);
-
-    // 10 分鐘內有效（Postgres 語法）
-    $sql = "
-        UPDATE users
-        SET line_bind_code = :code,
-            line_bind_code_expires_at = NOW() + INTERVAL '10 minutes'
-        WHERE id = :id
-    ";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([
-        ':code' => $code,
-        ':id'   => $userId,
-    ]);
-
-    sendResponse(['success' => true, 'code' => $code]);
-
-} elseif ($action === 'line_unbind') {
-    $sql = "UPDATE users SET line_user_id = NULL WHERE id = ?";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([$userId]);
-    sendResponse(['success' => true]);
 
 } elseif ($action === 'ai_coach') {
     $msg = $input['message'] ?? '';
-    
-    // 取得歷史紀錄
-    $stmt = $pdo->prepare("SELECT date, type, minutes, calories FROM workouts WHERE user_id = ? ORDER BY date DESC LIMIT 10");
-    $stmt->execute([$userId]);
-    $rows = $stmt->fetchAll();
+    $historyText = $input['history'] ?? '';
 
-    $historyText = "最近運動紀錄：\n";
-    foreach ($rows as $r) {
-        $historyText .= "{$r['date']} - {$r['type']} ({$r['minutes']}分鐘, {$r['calories']}kcal)\n";
+    if (!$msg) {
+        sendResponse(['success' => false, 'message' => 'empty_message']);
     }
 
     $reply = askCoach($historyText, $msg);
     sendResponse(['success' => true, 'reply' => $reply]);
-
-} elseif ($action === 'update_avatar') {
-    // 更新用戶頭像
-    $avatar_id = $input['avatar_id'] ?? 1;
-    
-    // 驗證 avatar_id 範圍 (1-11)
-    if ($avatar_id < 1 || $avatar_id > 11) {
-        sendResponse(['success' => false, 'message' => 'invalid_avatar_id']);
-    }
-    
-    // 更新資料庫
-    $sql = "UPDATE users SET avatar_id = ? WHERE id = ?";
-    $stmt = $pdo->prepare($sql);
-    $result = $stmt->execute([$avatar_id, $userId]);
-    
-    if ($result) {
-        sendResponse(['success' => true, 'avatar_id' => $avatar_id]);
-    } else {
-        sendResponse(['success' => false, 'message' => 'update_failed']);
-    }
 
 } else {
     sendResponse(['success' => false, 'message' => 'Unknown action: ' . htmlspecialchars($action)]);
