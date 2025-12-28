@@ -763,3 +763,63 @@ body {
     position: relative;
     z-index: 20;
 }
+
+/* ========================================
+   修正：右側固定，左側可捲動
+   ======================================== */
+
+/* 只針對 Dashboard 的 hero-container */
+#dashboard-view .hero-container {
+    display: flex !important;
+    align-items: flex-start !important;
+    justify-content: center !important;
+    min-height: 100vh !important;
+    padding: 100px 20px 50px !important;
+    gap: 50px !important;
+    max-width: 1400px !important;
+    margin: 0 auto !important;
+}
+
+/* 左側可以正常流動 */
+#dashboard-view .hero-left {
+    flex: 1 !important;
+    position: relative !important;
+}
+
+/* 右側固定在視窗內 */
+#dashboard-view .hero-right {
+    flex: 1.2 !important;
+    position: sticky !important;
+    top: 100px !important;
+    max-height: calc(100vh - 120px) !important;
+    overflow-y: auto !important;
+    align-self: flex-start !important;
+}
+
+/* 美化右側捲軸（如果內容太長） */
+#dashboard-view .hero-right::-webkit-scrollbar {
+    width: 8px;
+}
+
+#dashboard-view .hero-right::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 10px;
+}
+
+#dashboard-view .hero-right::-webkit-scrollbar-thumb {
+    background: rgba(255, 165, 2, 0.4);
+    border-radius: 10px;
+}
+
+#dashboard-view .hero-right::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 165, 2, 0.7);
+}
+
+/* 響應式：小螢幕時恢復正常 */
+@media (max-width: 900px) {
+    #dashboard-view .hero-right {
+        position: relative !important;
+        top: auto !important;
+        max-height: none !important;
+    }
+}
