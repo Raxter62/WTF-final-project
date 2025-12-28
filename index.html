@@ -168,7 +168,6 @@
         }
 
         .form-control:focus {
-            transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
         }
 
@@ -280,12 +279,8 @@
                 <label class="form-label">密碼</label>
                 <input type="password" class="form-control" name="password" required>
                 <button type="submit" class="btn-primary" style="width: 100%;">登入</button>
-                <<<<<<< HEAD <p style="text-align: center; margin-top: 1rem; cursor: pointer; color: #999;"
-                    onclick="demoLogin()">
+                <p style="text-align: center; margin-top: 1rem; cursor: pointer; color: #999;" onclick="demoLogin()">
                     Demo 模式登入</p>
-
-                    =======
-                    >>>>>>> 7d28427ba262fed486bc3f5c299c9f97af78287c
             </form>
 
             <form id="register-form" class="hidden">
@@ -323,19 +318,43 @@
         <!-- Hero: 左大頭貼 右輸入 -->
         <section id="section-hero" class="container hero-container">
             <!-- 左 -->
+            <!-- 左 -->
             <div class="hero-left">
                 <div class="avatar-wrapper">
                     <div class="avatar-arrow left" onclick="changeAvatar(-1)">❮</div>
                     <img src="public/image/1.png" id="current-avatar" class="avatar-img" alt="Avatar">
                     <div class="avatar-arrow right" onclick="changeAvatar(1)">❯</div>
                 </div>
-                <div style="display: flex; align-items: center; gap: 10px; margin-top: 1rem;">
-                    <h2 id="user-display-name" style="margin: 0; font-size: 4rem;">User</h2>
-                    <span style="cursor: pointer; font-size: 1.5rem; color: #f1efef;"
-                        onclick="enableProfileEdit()">✎</span>
+
+                <!-- Profile View Mode -->
+                <div id="profile-view" style="text-align: center;">
+                    <div
+                        style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 1rem;">
+                        <h2 id="profile-name" style="margin: 0; font-size: 2.5rem;">User</h2>
+                        <span style="cursor: pointer; font-size: 1.5rem; color: #f1efef;"
+                            onclick="enableProfileEdit()">✎</span>
+                    </div>
+                    <div style="margin-top: 10px; color: var(--secondary); font-size: 1.2rem;">
+                        <span id="profile-height">--</span> cm / <span id="profile-weight">--</span> kg
+                    </div>
                 </div>
-                <div id="profile-stats" style="margin-top: 10px; color: var(--secondary); font-size: 1.2rem;">
-                    <!-- JS Generated -->
+
+                <!-- Profile Edit Mode -->
+                <div id="profile-edit" class="hidden" style="text-align: center; margin-top: 1rem; width: 80%;">
+                    <input type="text" id="edit-display-name" class="form-control" placeholder="暱稱"
+                        style="text-align: center; font-size: 1.5rem; font-weight: bold; margin-bottom: 10px;">
+                    <div style="display: flex; gap: 10px;">
+                        <input type="number" id="edit-height" class="form-control" placeholder="身高(cm)"
+                            style="text-align: center;">
+                        <input type="number" id="edit-weight" class="form-control" placeholder="體重(kg)"
+                            style="text-align: center;">
+                    </div>
+                    <div style="display: flex; gap: 10px; justify-content: center; margin-top: 10px;">
+                        <button class="btn-primary" style="padding: 5px 20px; font-size: 1rem;"
+                            onclick="saveProfile()">儲存</button>
+                        <button class="btn-primary" style="padding: 5px 20px; font-size: 1rem; background: #999;"
+                            onclick="cancelProfileEdit()">取消</button>
+                    </div>
                 </div>
             </div>
             <!-- 右 -->
@@ -480,105 +499,128 @@
 
 
 
-        <!-- LINE 綁定區塊 -->
-        <div
-            style="margin-top: 3rem; padding: 2rem; background: rgba(255,255,255,0.95); border-radius: 20px; backdrop-filter: blur(10px); border: 1px solid rgba(0,0,0,0.1); box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 1200px; margin-left: auto; margin-right: auto;">
-            <h3
-                style="margin: 0 0 1.5rem 0; color: #333; font-size: 1.5rem; display: flex; align-items: center; gap: 10px; font-weight: bold; justify-content: center;">
-                <span style="font-size: 2rem;">📱</span> LINE 綁定
-            </h3>
-            <div id="line-bind-status">
-                <!-- 未綁定狀態 -->
-                <div id="not-bound">
-                    <p style="color: #555; margin-bottom: 1.5rem; font-size: 1rem; text-align: center;">綁定 LINE 後可接收運動提醒
-                    </p>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: start;">
-                        <!-- 左側：按鈕和說明 -->
-                        <div>
-                            <button onclick="generateBindCode()" class="btn-primary"
-                                style="width: 100%; margin-bottom: 1rem;">
-                                產生綁定碼
-                            </button>
-                            <div
-                                style="background: rgba(102, 126, 234, 0.1); padding: 1.5rem; border-radius: 12px; border-left: 4px solid #667eea;">
-                                <p style="color: #333; font-size: 0.95rem; margin: 0; line-height: 1.6;">
-                                    <strong style="color: #667eea;">📌 使用方式：</strong><br>
-                                    1️⃣ 點擊「產生綁定碼」按鈕<br>
-                                    2️⃣ 掃描 QR Code 或加入 LINE ID: <strong style="color: #667eea;">@063jezzz</strong><br>
-                                    3️⃣ 在 LINE Bot 中輸入綁定碼
-                                </p>
-                            </div>
-                        </div>
 
-                        <!-- 右側：QR Code 和綁定碼 -->
-                        <div id="bind-code-display" style="display: none; text-align: center;">
-                            <div
-                                style="background: #fff; padding: 2rem; border-radius: 10px; margin-bottom: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-                                <div id="qrcode" style="display: inline-block;"></div>
+        <!-- Wave Divider (Blue) -->
+        <div class="wave-divider" style="height: 120px; margin-bottom: 0; position: relative; z-index: 20;">
+            <svg class="waves" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+                viewBox="0 24 150 28" preserveAspectRatio="none" shape-rendering="auto">
+                <defs>
+                    <path id="gentle-wave3"
+                        d="M-160 44c30 0 58-18 88-18s 58 18 88 18 58-18 88-18 58 18 88 18 v44h-352z" />
+                </defs>
+                <g class="parallax">
+                    <use xlink:href="#gentle-wave3" x="48" y="0" />
+                    <use xlink:href="#gentle-wave3" x="48" y="3" />
+                    <use xlink:href="#gentle-wave3" x="48" y="5" />
+                    <use xlink:href="#gentle-wave3" x="48" y="7" />
+                </g>
+            </svg>
+        </div>
+
+        <!-- LINE 綁定區塊 -->
+        <section id="section-line-binding"
+            style="width: 100%; padding: 150px 20px 100px; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(10px); margin-top: -120px; position: relative; z-index: 10;">
+            <div
+                style="margin-top: 3rem; padding: 2rem; background: rgba(255,255,255,0.95); border-radius: 20px; backdrop-filter: blur(10px); border: 1px solid rgba(0,0,0,0.1); box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 1200px; margin-left: auto; margin-right: auto;">
+                <h3
+                    style="margin: 0 0 1.5rem 0; color: #333; font-size: 1.5rem; display: flex; align-items: center; gap: 10px; font-weight: bold; justify-content: center;">
+                    <span style="font-size: 2rem;">📱</span> LINE 綁定
+                </h3>
+
+                <!-- ... existing LINE content ... -->
+                <div id="line-bind-status">
+                    <!-- 未綁定狀態 -->
+                    <div id="not-bound">
+                        <p style="color: #555; margin-bottom: 1.5rem; font-size: 1rem; text-align: center;">綁定 LINE
+                            後可接收運動提醒
+                        </p>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: start;">
+                            <!-- 左側：按鈕和說明 -->
+                            <div>
+                                <button onclick="generateBindCode()" class="btn-primary"
+                                    style="width: 100%; margin-bottom: 1rem;">
+                                    產生綁定碼
+                                </button>
+                                <div
+                                    style="background: rgba(102, 126, 234, 0.1); padding: 1.5rem; border-radius: 12px; border-left: 4px solid #667eea;">
+                                    <p style="color: #333; font-size: 0.95rem; margin: 0; line-height: 1.6;">
+                                        <strong style="color: #667eea;">📌 使用方式：</strong><br>
+                                        1️⃣ 點擊「產生綁定碼」按鈕<br>
+                                        2️⃣ 掃描 QR Code 或加入 LINE ID: <strong
+                                            style="color: #667eea;">@063jezzz</strong><br>
+                                        3️⃣ 在 LINE Bot 中輸入綁定碼
+                                    </p>
+                                </div>
                             </div>
-                            <div
-                                style="background: #667eea; padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem; border: 2px solid rgba(255,255,255,0.3);">
-                                <p style="color: #fff; margin: 0 0 0.5rem 0; font-size: 1rem; font-weight: bold;">
-                                    綁定碼（10分鐘內有效）</p>
-                                <p id="bind-code-text"
-                                    style="color: #feca57; font-size: 2.5rem; font-weight: bold; margin: 0; letter-spacing: 5px; text-shadow: 0 2px 4px rgba(0,0,0,0.3);">
-                                    ------</p>
+
+                            <!-- 右側：QR Code 和綁定碼 -->
+                            <div id="bind-code-display" style="display: none; text-align: center;">
+                                <div
+                                    style="background: #fff; padding: 2rem; border-radius: 10px; margin-bottom: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                                    <div id="qrcode" style="display: inline-block;"></div>
+                                </div>
+                                <div
+                                    style="background: #667eea; padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem; border: 2px solid rgba(255,255,255,0.3);">
+                                    <p style="color: #fff; margin: 0 0 0.5rem 0; font-size: 1rem; font-weight: bold;">
+                                        綁定碼（10分鐘內有效）</p>
+                                    <p id="bind-code-text"
+                                        style="color: #feca57; font-size: 2.5rem; font-weight: bold; margin: 0; letter-spacing: 5px; text-shadow: 0 2px 4px rgba(0,0,0,0.3);">
+                                        ------</p>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- 已綁定狀態 -->
-                <div id="already-bound" style="display: none; text-align: center;">
-                    <p
-                        style="color: #22c55e; margin-bottom: 1rem; display: flex; align-items: center; gap: 8px; font-size: 1.1rem; font-weight: bold; justify-content: center;">
-                        <span style="font-size: 1.3rem;">✓</span> 已綁定 LINE
-                    </p>
-                    <button onclick="unbindLine()" class="btn-primary" style="width: 50%; background: #ef4444;">
-                        解除綁定
-                    </button>
+                    <!-- 已綁定狀態 -->
+                    <div id="already-bound" style="display: none; text-align: center;">
+                        <p
+                            style="color: #22c55e; margin-bottom: 1rem; display: flex; align-items: center; gap: 8px; font-size: 1.1rem; font-weight: bold; justify-content: center;">
+                            <span style="font-size: 1.3rem;">✓</span> 已綁定 LINE
+                        </p>
+                        <button onclick="unbindLine()" class="btn-primary" style="width: 50%; background: #ef4444;">
+                            解除綁定
+                        </button>
+                    </div>
                 </div>
+            </div>
+        </section>
+        <!-- Coach 半身像 -->
+        <div id="ai-coach-container" class="hidden">
+            <div class="coach-img-wrapper" onclick="toggleChat()"
+                onmouseover="document.querySelector('.coach-full-img').src='public/image/tinin2.png'"
+                onmouseout="document.querySelector('.coach-full-img').src='public/image/tinin.png'">
+                <div class="coach-bubble" id="coach-bubble">今天想練什麼呢？</div>
+                <img src="public/image/tinin.png" class="coach-full-img" alt="AI Coach">
             </div>
         </div>
 
-    </div>
-    <!-- Coach 半身像 -->
-    <div id="ai-coach-container" class="hidden">
-        <div class="coach-img-wrapper" onclick="toggleChat()"
-            onmouseover="document.querySelector('.coach-full-img').src='public/image/tinin2.png'"
-            onmouseout="document.querySelector('.coach-full-img').src='public/image/tinin.png'">
-            <div class="coach-bubble" id="coach-bubble">今天想練什麼呢？</div>
-            <img src="public/image/tinin.png" class="coach-full-img" alt="AI Coach">
+        <!-- Chat Window (Absolute) -->
+        <div id="chat-window">
+            <div class="chat-header">
+                <strong>AI 教練</strong>
+            </div>
+            <div id="chat-messages">
+                <div class="chat-msg ai">嗨！我是你的專屬教練。</div>
+            </div>
+            <div class="chat-input-area">
+                <input type="text" id="chat-input" class="form-control" placeholder="問我...">
+                <button onclick="sendChatMessage()">➤</button>
+            </div>
         </div>
-    </div>
-
-    <!-- Chat Window (Absolute) -->
-    <div id="chat-window">
-        <div class="chat-header">
-            <strong>AI 教練</strong>
-        </div>
-        <div id="chat-messages">
-            <div class="chat-msg ai">嗨！我是你的專屬教練。</div>
-        </div>
-        <div class="chat-input-area">
-            <input type="text" id="chat-input" class="form-control" placeholder="問我...">
-            <button onclick="sendChatMessage()">➤</button>
-        </div>
-    </div>
 
 
 
-    <!-- Scripts -->
-    <script src="public/js/main.js"></script>
-    <script src="public/js/bg-effects.js"></script>
-    <script src="public/js/ai_chat.js"></script>
-    <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./service-worker.js')
-                .then(reg => console.log('SW registered!', reg))
-                .catch(err => console.log('SW failed!', err))
-        }
-    </script>
+        <!-- Scripts -->
+        <script src="public/js/main.js"></script>
+        <script src="public/js/bg-effects.js"></script>
+        <script src="public/js/ai_chat.js"></script>
+        <script>
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('./service-worker.js')
+                    .then(reg => console.log('SW registered!', reg))
+                    .catch(err => console.log('SW failed!', err))
+            }
+        </script>
 </body>
 
 </html>

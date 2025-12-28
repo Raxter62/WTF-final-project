@@ -30,6 +30,24 @@ function switchTab(tab) {
     }
 }
 
+// Demo Mode State
+let demoData = {
+    barLabels: ['週一', '週二', '週三', '週四', '週五', '週六', '週日'],
+    barData: [30, 45, 60, 20, 90, 45, 60],
+    lineLabels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+    lineData: [150, 230, 320, 180, 450, 300, 350],
+    pieLabels: ['跑步', '重訓', '游泳', '腳踏車', '瑜珈', '其他'],
+    pieData: [10, 20, 15, 25, 10, 20],
+    totalCalories: 1980,
+    leaderboard: [
+        { display_name: 'Demo Hero', total_calories: 2200 },
+        { display_name: 'Fast Runner', total_calories: 1800 },
+        { display_name: 'Gym Bro', total_calories: 1500 },
+        { display_name: 'Yoga Master', total_calories: 1200 },
+        { display_name: 'Cyclist', total_calories: 1000 }
+    ]
+};
+
 function demoLogin() {
     isDemoMode = true;
     currentUser = {
@@ -39,7 +57,16 @@ function demoLogin() {
         height: 170,
         weight: 65
     };
+
+    // Reset or ensure default demo data
+    demoData.totalCalories = 2200; // sync with leaderboard
+
     showDashboard();
+
+    // Slight delay to ensure charts render then update
+    setTimeout(() => {
+        loadAllCharts();
+    }, 100);
 }
 
 function toggleChat() {
@@ -200,6 +227,10 @@ function showDashboard() {
     document.getElementById('auth-view').classList.add('hidden');
     document.getElementById('dashboard-view').classList.remove('hidden');
 
+    // 顯示 AI 教練
+    const coachContainer = document.getElementById('ai-coach-container');
+    if (coachContainer) coachContainer.classList.remove('hidden');
+
     updateProfileUI();
     loadAllCharts();
 }
@@ -285,7 +316,12 @@ async function saveProfile() {
         }
         updateProfileUI();
         cancelProfileEdit();
-        alert('Demo 模式：已更新（不寫入資料庫）');
+        // Update leaderboard name if it matches
+        const hero = demoData.leaderboard.find(u => u.display_name === 'Demo Hero' || u.total_calories === demoData.totalCalories);
+        if (hero && currentUser.display_name) hero.display_name = currentUser.display_name;
+        renderLeaderboard();
+
+        alert('Demo 模式：個人資料已更新！');
         return;
     }
 
@@ -317,13 +353,7 @@ function changeAvatar(delta) {
 async function handleAddWorkout(e) {
     e.preventDefault();
 
-    if (isDemoMode) {
-        alert('Demo 模式：已新增（不寫入資料庫）');
-        return;
-    }
-
     const form = e.target;
-
     const type = form.type.value;
     const minutes = Number(form.minutes.value);
     const datePart = (document.getElementById('input-date-part')?.value || '').trim();
@@ -335,6 +365,40 @@ async function handleAddWorkout(e) {
     }
 
     const calories = calculateCalories(type, minutes, currentUser?.height, currentUser?.weight);
+
+    if (isDemoMode) {
+        // 1. Update Total
+        demoData.totalCalories += calories;
+
+        // 2. Update Pie
+        // ['跑步', '重訓', '游泳', '腳踏車', '瑜珈', '其他']
+        const typeIndex = demoData.pieLabels.indexOf(type);
+        if (typeIndex >= 0) {
+            demoData.pieData[typeIndex] += 1; // Count or Calories? Original pie chart seems to be count-based or time-based? 
+            // Checking logic: Chart label says "運動分布", let's assume it tracks frequency or just modify it loosely.
+            // Actually let's assume it tracks occurrences for simplicity in this demo logic, 
+            // OR if you want it to match existing logic, it depends on what the backend does. 
+            // The plan says "Update pie chart". Let's just increment the count for that type.
+        }
+
+        // 3. Update Bar (Add to today's bar for simplicity, or just last one)
+        // Assume last bar is "Today"
+        demoData.barData[6] += minutes;
+
+        // 4. Update Line (Add to last point)
+        demoData.lineData[6] += calories;
+
+        // 5. Update Leaderboard (User is top one usually)
+        if (demoData.leaderboard.length > 0) {
+            // Find the user or just update the first one
+            demoData.leaderboard[0].total_calories = demoData.totalCalories;
+        }
+
+        form.reset();
+        loadAllCharts(); // Will use new demoData
+        alert(`Demo 模式：已新增紀錄！ (消耗 ${calories} kcal)`);
+        return;
+    }
 
     const res = await fetchPost('add_workout', { type, minutes, date, calories });
     if (res.success) {
@@ -397,9 +461,41 @@ function buildEmptyChartData() {
 }
 
 async function loadAllCharts() {
-    // Demo 模式：維持 main1 的圖表渲染流程（不採用 main.js 的隨機圖表邏輯）
+    // Demo 模式：維持 main1 的圖表渲染流程，但使用動態 demoData
     if (isDemoMode) {
-        chartCache = buildEmptyChartData();
+        // Deep copy or re-assign to refresh
+        let demoCharts = { ...demoData }; // Shallow copy base
+
+        // Simple simulation of different ranges logic
+        if (globalTimeRange === '1d') {
+            demoCharts.barLabels = ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00'];
+            demoCharts.barData = [0, 45, 0, 0, 30, 60, 0];
+            demoCharts.lineLabels = ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00'];
+            demoCharts.lineData = [0, 300, 0, 0, 200, 450, 0];
+        } else if (globalTimeRange === '1wk') {
+            // Default demoData is 1wk
+        } else if (globalTimeRange === '1m') {
+            demoCharts.barLabels = ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
+            demoCharts.barData = [150, 200, 180, 250];
+            demoCharts.lineLabels = ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
+            demoCharts.lineData = [1200, 1500, 1400, 1800];
+        } else if (globalTimeRange === '3m') {
+            demoCharts.barLabels = ['Oct', 'Nov', 'Dec'];
+            demoCharts.barData = [600, 750, 800];
+            demoCharts.lineLabels = ['Oct', 'Nov', 'Dec'];
+            demoCharts.lineData = [4500, 5200, 6000];
+        }
+
+        chartCache = {
+            barLabels: demoCharts.barLabels,
+            barData: demoCharts.barData,
+            lineLabels: demoCharts.lineLabels,
+            lineData: demoCharts.lineData,
+            pieLabels: demoCharts.pieLabels,
+            pieData: demoCharts.pieData,
+            totalCalories: demoCharts.totalCalories
+        };
+
         if (!barInstance) initCharts();
         updateCharts();
         renderLeaderboard();
@@ -542,13 +638,8 @@ async function renderLeaderboard(prefetched) {
     if (!tbody) return;
 
     if (isDemoMode) {
-        const demoUsers = [
-            { display_name: 'Demo Hero', total_calories: 420 },
-            { display_name: 'Demo Runner', total_calories: 360 },
-            { display_name: 'Demo Lifter', total_calories: 300 }
-        ];
-        // reuse existing renderer below
-        prefetched = demoUsers;
+        // Use demoData leaderboard
+        prefetched = demoData.leaderboard;
     }
 
     const renderRows = (users) => {

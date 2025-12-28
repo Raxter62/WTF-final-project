@@ -1,5 +1,6 @@
 <?php
 session_start();
+header('Content-Type: text/html; charset=utf-8');
 require_once 'config.php';
 
 // 如果已經登入，直接跳轉
