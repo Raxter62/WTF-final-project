@@ -1,6 +1,6 @@
 <?php
 // LLM/coach.php
-require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/../config.php';
 
 /**
  * 你可以在 Railway Variables 設：
@@ -46,6 +46,10 @@ function is_coach_related(string $text): bool {
  * 你也可以把這段搬去 config.php 做成 get_pdo()，這裡先寫成獨立函式方便你直接用。
  */
 function get_pdo(): PDO {
+    if (isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) {
+        return $GLOBALS['pdo'];
+    }
+
     $url = getenv('DATABASE_URL');
     if ($url) {
         $parts = parse_url($url);
