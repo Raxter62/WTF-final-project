@@ -617,6 +617,125 @@
 
         <!-- ✅ cache bust：立刻繞過舊 SW 快取的 main.js -->
         <script src="public/js/main.js?v=20251228_1"></script>
+        
+        <!-- 🔧 緊急修復腳本：確保表單綁定 -->
+        <script>
+        (function() {
+            console.log('🔧 執行緊急修復腳本...');
+            
+            // 等待 DOM 完全載入
+            function fixForms() {
+                console.log('🔧 開始修復表單綁定...');
+                
+                const loginForm = document.getElementById('login-form');
+                const registerForm = document.getElementById('register-form');
+                
+                if (loginForm && !loginForm.onsubmit) {
+                    console.log('⚠️ 登入表單未綁定，現在修復...');
+                    
+                    loginForm.onsubmit = async function(e) {
+                        e.preventDefault();
+                        console.log('🔐 [緊急修復] 處理登入...');
+                        
+                        const email = this.querySelector('input[name="email"]').value.trim();
+                        const password = this.querySelector('input[name="password"]').value;
+                        
+                        if (!email || !password) {
+                            alert('請輸入 Email 與密碼');
+                            return;
+                        }
+                        
+                        try {
+                            const res = await fetch('submit.php?action=login', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                credentials: 'same-origin',
+                                body: JSON.stringify({ email, password })
+                            });
+                            
+                            const text = await res.text();
+                            const json = JSON.parse(text);
+                            
+                            console.log('📥 登入回應:', json);
+                            
+                            if (json.success) {
+                                console.log('✅ 登入成功');
+                                location.reload();
+                            } else {
+                                alert('登入失敗: ' + (json.message || '帳號或密碼錯誤'));
+                            }
+                        } catch (err) {
+                            console.error('❌ 登入錯誤:', err);
+                            alert('連線錯誤: ' + err.message);
+                        }
+                    };
+                    
+                    console.log('✅ 登入表單已修復');
+                } else if (loginForm) {
+                    console.log('✅ 登入表單已經綁定');
+                }
+                
+                if (registerForm && !registerForm.onsubmit) {
+                    console.log('⚠️ 註冊表單未綁定，現在修復...');
+                    
+                    registerForm.onsubmit = async function(e) {
+                        e.preventDefault();
+                        console.log('📝 [緊急修復] 處理註冊...');
+                        
+                        const display_name = this.querySelector('input[name="display_name"]').value.trim();
+                        const email = this.querySelector('input[name="email"]').value.trim();
+                        const password = this.querySelector('input[name="password"]').value;
+                        
+                        if (!display_name || !email || !password) {
+                            alert('請輸入暱稱、Email 與密碼');
+                            return;
+                        }
+                        
+                        try {
+                            const res = await fetch('submit.php?action=register', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                credentials: 'same-origin',
+                                body: JSON.stringify({ display_name, email, password })
+                            });
+                            
+                            const text = await res.text();
+                            const json = JSON.parse(text);
+                            
+                            console.log('📥 註冊回應:', json);
+                            
+                            if (json.success) {
+                                console.log('✅ 註冊成功');
+                                location.reload();
+                            } else {
+                                alert('註冊失敗: ' + (json.message || '未知錯誤'));
+                            }
+                        } catch (err) {
+                            console.error('❌ 註冊錯誤:', err);
+                            alert('連線錯誤: ' + err.message);
+                        }
+                    };
+                    
+                    console.log('✅ 註冊表單已修復');
+                } else if (registerForm) {
+                    console.log('✅ 註冊表單已經綁定');
+                }
+            }
+            
+            // 多次嘗試修復
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() {
+                    setTimeout(fixForms, 100);
+                    setTimeout(fixForms, 500);
+                    setTimeout(fixForms, 1000);
+                });
+            } else {
+                setTimeout(fixForms, 100);
+                setTimeout(fixForms, 500);
+                setTimeout(fixForms, 1000);
+            }
+        })();
+        </script>
 
         <script src="public/js/bg-effects.js"></script>
         <script src="public/js/ai_chat.js"></script>
