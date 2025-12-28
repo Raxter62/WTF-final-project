@@ -610,15 +610,41 @@
 
 
 
-        <!-- Scripts -->
-        <script src="public/js/main.js"></script>
+        <!-- ✅ 防呆：就算被舊快取 main.js 影響，也不會因 isDemoMode 未宣告而整站掛掉 -->
+        <script>
+            window.isDemoMode = (typeof window.isDemoMode !== "undefined") ? window.isDemoMode : false;
+        </script>
+
+        <!-- ✅ cache bust：立刻繞過舊 SW 快取的 main.js -->
+        <script src="public/js/main.js?v=20251228_1"></script>
+
         <script src="public/js/bg-effects.js"></script>
         <script src="public/js/ai_chat.js"></script>
+
+        <!-- ✅ SW 註冊（自動更新 + 立即啟用 + 接管後自動 reload） -->
         <script>
             if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('./service-worker.js')
-                    .then(reg => console.log('SW registered!', reg))
-                    .catch(err => console.log('SW failed!', err))
+                window.addEventListener('load', async () => {
+                    try {
+                        const reg = await navigator.serviceWorker.register('./service-worker.js');
+                        console.log('SW registered!', reg);
+
+                        if (reg.update) await reg.update();
+
+                        if (reg.waiting) {
+                            reg.waiting.postMessage('SKIP_WAITING');
+                        }
+
+                        let reloaded = false;
+                        navigator.serviceWorker.addEventListener('controllerchange', () => {
+                            if (reloaded) return;
+                            reloaded = true;
+                            window.location.reload();
+                        });
+                    } catch (err) {
+                        console.log('SW failed!', err);
+                    }
+                });
             }
         </script>
 </body>

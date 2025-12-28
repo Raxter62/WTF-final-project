@@ -214,8 +214,6 @@ if ($action === 'get_user_info') {
     sendResponse(['success' => true, 'data' => $rows]);
 }
 
-// 其餘 action 你原本後段還有（line 綁定/解除等），請把你原 submit.php 後半段接回去即可。
-// 若你要我「完整合併不缺任何 action」，把你 submit.php 後半段剩下內容再貼一次，我會整份補齊。
 sendResponse(['success' => false, 'message' => 'Unknown action']);
 
 // --- 需登入後的動作 ---
