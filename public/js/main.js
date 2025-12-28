@@ -260,6 +260,7 @@ function saveName() {
 
 function generateAvatarGrid() {
     const grid = document.getElementById('avatar-grid');
+    if (!grid) return; // 若頁面未放置頭像面板則跳過
     grid.innerHTML = '';
 
     // 使用 1.png 到 11.png

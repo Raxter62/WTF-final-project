@@ -119,6 +119,10 @@ try {
         );
     ");
 
+    // 補齊 avatar 欄位，避免舊資料表缺少導致查詢錯誤
+    $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_id INTEGER DEFAULT 1;");
+    $pdo->exec("UPDATE users SET avatar_id = 1 WHERE avatar_id IS NULL;");
+
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS workouts (
             id BIGSERIAL PRIMARY KEY,
