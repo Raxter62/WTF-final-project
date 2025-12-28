@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FitConnect 運動平台</title>
+    <link rel="icon" href="public/image/logo/logo.png">
     <link rel="manifest" href="manifest.json">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
@@ -14,8 +15,8 @@
         #login-form,
         #register-form {
             transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
-                        transform 0.6s cubic-bezier(0.16, 1, 0.3, 1),
-                        filter 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+                transform 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+                filter 0.6s cubic-bezier(0.16, 1, 0.3, 1);
             transform-origin: center;
             will-change: opacity, transform;
         }
@@ -50,6 +51,7 @@
                 transform: translateX(40px) scale(0.92);
                 filter: blur(4px);
             }
+
             100% {
                 opacity: 1;
                 transform: translateX(0) scale(1);
@@ -99,6 +101,7 @@
                 opacity: 0;
                 transform: translateY(15px);
             }
+
             100% {
                 opacity: 1;
                 transform: translateY(0);
@@ -210,9 +213,12 @@
 
         /* 綁定碼動畫 */
         @keyframes pulse {
-            0%, 100% {
+
+            0%,
+            100% {
                 transform: scale(1);
             }
+
             50% {
                 transform: scale(1.05);
             }
@@ -223,6 +229,7 @@
                 opacity: 0;
                 transform: translateY(20px);
             }
+
             to {
                 opacity: 1;
                 transform: translateY(0);
@@ -273,7 +280,8 @@
                     <label class="form-label">密碼</label>
                     <input type="password" id="login-password" class="form-control" name="password" required>
                     <button type="submit" class="btn-primary" style="width: 100%; margin-top: 0.5rem;">登入</button>
-                    <p style="text-align: center; margin-top: 1rem; cursor: pointer; color: #999; font-size: 0.9rem;" onclick="demoLogin()">
+                    <p style="text-align: center; margin-top: 1rem; cursor: pointer; color: #999; font-size: 0.9rem;"
+                        onclick="demoLogin()">
                         Demo 模式登入
                     </p>
                 </form>
@@ -323,7 +331,10 @@
                 <div style="display: flex; align-items: center; gap: 10px; margin-top: 1rem;">
                     <h2 id="user-display-name" style="margin: 0; font-size: 4rem;">User</h2>
                     <span style="cursor: pointer; font-size: 1.5rem; color: #f1efef;"
-                        onclick="enableNameEdit()">✎</span>
+                        onclick="showEditProfileModal()">✎</span>
+                </div>
+                <div style="font-size: 1.2rem; color: rgba(255,255,255,0.8); margin-bottom: 2rem;">
+                    <span id="user-height">未設定</span> / <span id="user-weight">未設定</span>
                 </div>
             </div>
             <!-- 右 -->
@@ -466,46 +477,58 @@
             </div>
 
             <!-- LINE 綁定區塊 -->
-            <div style="margin-top: 3rem; padding: 2rem; background: rgba(255,255,255,0.95); border-radius: 20px; backdrop-filter: blur(10px); border: 1px solid rgba(0,0,0,0.1); box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 1200px; margin-left: auto; margin-right: auto;">
-                <h3 style="margin: 0 0 1.5rem 0; color: #333; font-size: 1.5rem; display: flex; align-items: center; gap: 10px; font-weight: bold; justify-content: center;">
+            <div
+                style="margin-top: 3rem; padding: 2rem; background: rgba(255,255,255,0.95); border-radius: 20px; backdrop-filter: blur(10px); border: 1px solid rgba(0,0,0,0.1); box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 1200px; margin-left: auto; margin-right: auto;">
+                <h3
+                    style="margin: 0 0 1.5rem 0; color: #333; font-size: 1.5rem; display: flex; align-items: center; gap: 10px; font-weight: bold; justify-content: center;">
                     <span style="font-size: 2rem;">📱</span> LINE 綁定
                 </h3>
                 <div id="line-bind-status">
                     <!-- 未綁定狀態 -->
                     <div id="not-bound">
-                        <p style="color: #555; margin-bottom: 1.5rem; font-size: 1rem; text-align: center;">綁定 LINE 後可接收運動提醒</p>
+                        <p style="color: #555; margin-bottom: 1.5rem; font-size: 1rem; text-align: center;">綁定 LINE
+                            後可接收運動提醒</p>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: start;">
                             <!-- 左側：按鈕和說明 -->
                             <div>
-                                <button onclick="generateBindCode()" class="btn-primary" style="width: 100%; margin-bottom: 1rem;">
+                                <button onclick="generateBindCode()" class="btn-primary"
+                                    style="width: 100%; margin-bottom: 1rem;">
                                     產生綁定碼
                                 </button>
-                                <div style="background: rgba(102, 126, 234, 0.1); padding: 1.5rem; border-radius: 12px; border-left: 4px solid #667eea;">
+                                <div
+                                    style="background: rgba(102, 126, 234, 0.1); padding: 1.5rem; border-radius: 12px; border-left: 4px solid #667eea;">
                                     <p style="color: #333; font-size: 0.95rem; margin: 0; line-height: 1.6;">
                                         <strong style="color: #667eea;">📌 使用方式：</strong><br>
                                         1️⃣ 點擊「產生綁定碼」按鈕<br>
-                                        2️⃣ 掃描 QR Code 或加入 LINE ID: <strong style="color: #667eea;">@063jezzz</strong><br>
+                                        2️⃣ 掃描 QR Code 或加入 LINE ID: <strong
+                                            style="color: #667eea;">@063jezzz</strong><br>
                                         3️⃣ 在 LINE Bot 中輸入綁定碼
                                     </p>
                                 </div>
                             </div>
-                            
+
                             <!-- 右側：QR Code 和綁定碼 -->
                             <div id="bind-code-display" style="display: none; text-align: center;">
-                                <div style="background: #fff; padding: 2rem; border-radius: 10px; margin-bottom: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                                <div
+                                    style="background: #fff; padding: 2rem; border-radius: 10px; margin-bottom: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
                                     <div id="qrcode" style="display: inline-block;"></div>
                                 </div>
-                                <div style="background: #667eea; padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem; border: 2px solid rgba(255,255,255,0.3);">
-                                    <p style="color: #fff; margin: 0 0 0.5rem 0; font-size: 1rem; font-weight: bold;">綁定碼（10分鐘內有效）</p>
-                                    <p id="bind-code-text" style="color: #feca57; font-size: 2.5rem; font-weight: bold; margin: 0; letter-spacing: 5px; text-shadow: 0 2px 4px rgba(0,0,0,0.3);">------</p>
+                                <div
+                                    style="background: #667eea; padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem; border: 2px solid rgba(255,255,255,0.3);">
+                                    <p style="color: #fff; margin: 0 0 0.5rem 0; font-size: 1rem; font-weight: bold;">
+                                        綁定碼（10分鐘內有效）</p>
+                                    <p id="bind-code-text"
+                                        style="color: #feca57; font-size: 2.5rem; font-weight: bold; margin: 0; letter-spacing: 5px; text-shadow: 0 2px 4px rgba(0,0,0,0.3);">
+                                        ------</p>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- 已綁定狀態 -->
                     <div id="already-bound" style="display: none; text-align: center;">
-                        <p style="color: #22c55e; margin-bottom: 1rem; display: flex; align-items: center; gap: 8px; font-size: 1.1rem; font-weight: bold; justify-content: center;">
+                        <p
+                            style="color: #22c55e; margin-bottom: 1rem; display: flex; align-items: center; gap: 8px; font-size: 1.1rem; font-weight: bold; justify-content: center;">
                             <span style="font-size: 1.3rem;">✓</span> 已綁定 LINE
                         </p>
                         <button onclick="unbindLine()" class="btn-primary" style="width: 50%; background: #ef4444;">
@@ -521,8 +544,8 @@
     <!-- Coach 半身像 -->
     <div id="ai-coach-container" class="hidden">
         <div class="coach-img-wrapper" onclick="toggleChat()"
-            onmouseover="document.querySelector('.coach-full-img').src='public/image/tinin2.png'"
-            onmouseout="document.querySelector('.coach-full-img').src='public/image/tinin.png'">
+            onmouseover="document.querySelector('.coach-full-img').src='public/image/tinin2.png'; document.getElementById('coach-bubble').style.opacity='1';"
+            onmouseout="document.querySelector('.coach-full-img').src='public/image/tinin.png'; document.getElementById('coach-bubble').style.opacity='0';">
             <div class="coach-bubble" id="coach-bubble">今天想練什麼呢？</div>
             <img src="public/image/tinin.png" class="coach-full-img" alt="AI Coach">
         </div>
@@ -546,49 +569,49 @@
 
 
     <!-- Scripts -->
-    
+
     <!-- 🛡️ 禁用自動登入（必須在 main.js 之前）-->
     <script>
-    (function() {
-        console.log('🛡️ 禁用自動登入系統啟動');
-        
-        // ===== 1. 先定義 checkLogin，防止 main.js 執行時找不到 =====
-        window.checkLogin = function() {
-            console.log('⛔ checkLogin 已被覆蓋 - 不執行自動登入');
-            
-            // 強制顯示登入頁面
-            const authView = document.getElementById('auth-view');
-            const dashboardView = document.getElementById('dashboard-view');
-            const coachContainer = document.getElementById('ai-coach-container');
-            
-            if (authView) {
-                authView.classList.remove('hidden');
-                authView.style.display = 'block';
-            }
-            if (dashboardView) {
-                dashboardView.classList.add('hidden');
-                dashboardView.style.display = 'none';
-            }
-            if (coachContainer) {
-                coachContainer.classList.add('hidden');
-                coachContainer.style.display = 'none';
-            }
-            
-            console.log('✅ 強制顯示登入頁面');
-        };
-        
-        // ===== 2. 立即執行一次，確保初始狀態 =====
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('📍 DOM 載入完成，執行 checkLogin');
-            window.checkLogin();
-        });
-        
-        console.log('✅ 自動登入已禁用（已覆蓋 checkLogin）');
-    })();
+        (function () {
+            console.log('🛡️ 禁用自動登入系統啟動');
+
+            // ===== 1. 先定義 checkLogin，防止 main.js 執行時找不到 =====
+            window.checkLogin = function () {
+                console.log('⛔ checkLogin 已被覆蓋 - 不執行自動登入');
+
+                // 強制顯示登入頁面
+                const authView = document.getElementById('auth-view');
+                const dashboardView = document.getElementById('dashboard-view');
+                const coachContainer = document.getElementById('ai-coach-container');
+
+                if (authView) {
+                    authView.classList.remove('hidden');
+                    authView.style.display = 'block';
+                }
+                if (dashboardView) {
+                    dashboardView.classList.add('hidden');
+                    dashboardView.style.display = 'none';
+                }
+                if (coachContainer) {
+                    coachContainer.classList.add('hidden');
+                    coachContainer.style.display = 'none';
+                }
+
+                console.log('✅ 強制顯示登入頁面');
+            };
+
+            // ===== 2. 立即執行一次，確保初始狀態 =====
+            document.addEventListener('DOMContentLoaded', function () {
+                console.log('📍 DOM 載入完成，執行 checkLogin');
+                window.checkLogin();
+            });
+
+            console.log('✅ 自動登入已禁用（已覆蓋 checkLogin）');
+        })();
     </script>
-    
+
     <script src="public/js/main.js"></script>
-    
+
     <script src="public/js/bg-effects.js"></script>
     <script src="public/js/ai_chat.js"></script>
     <script>

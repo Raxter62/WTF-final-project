@@ -524,10 +524,8 @@ body {
     transition: 0.3s;
     color: var(--primary);
     border: 2px solid var(--primary);
-}
-
-.coach-img-wrapper:hover .coach-bubble {
-    opacity: 1;
+    pointer-events: none;
+    /* Prevent clicking invisible bubble */
 }
 
 /* Chat Window */
@@ -535,7 +533,6 @@ body {
     position: fixed !important;
     right: 20px !important;
     bottom: 250px !important;
-    /* Just above coach head */
     width: 380px;
     height: 420px;
     background: #fff;
@@ -545,11 +542,33 @@ body {
     display: flex;
     flex-direction: column;
     border: 2px solid var(--primary);
-    opacity: 0;
-    /* Hidden by default */
-    pointer-events: none;
-    transition: 0.3s;
-    transform: translateY(20px);
+    display: none;
+    /* Hidden by default via toggle logic */
+    /* Remove pointer-events: none so clicks work */
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeOut {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    to {
+        opacity: 0;
+        transform: translateY(20px);
+    }
 }
 
 /* Chat Styles */

@@ -20,17 +20,17 @@ if (document.readyState === 'loading') {
 
 function initApp() {
     console.log('✅ FitConnect 初始化開始...');
-    
+
     // 延遲執行確保所有元素都已渲染
     setTimeout(() => {
         console.log('🔧 開始設置應用程式...');
-        
+
         checkLogin();
         setupForms();
         generateAvatarGrid();
         setupCoachInteraction();
         setupDateTimeDefaults();
-        
+
         console.log('✅ 應用程式設置完成');
     }, 200);
 }
@@ -76,11 +76,11 @@ function showLogin() {
     const authView = document.getElementById('auth-view');
     const dashboardView = document.getElementById('dashboard-view');
     const coachContainer = document.getElementById('ai-coach-container');
-    
+
     if (authView) authView.classList.remove('hidden');
     if (dashboardView) dashboardView.classList.add('hidden');
     if (coachContainer) coachContainer.classList.add('hidden');
-    
+
     // 清空登入表單
     const loginForm = document.getElementById('login-form');
     if (loginForm) {
@@ -89,7 +89,7 @@ function showLogin() {
         if (emailInput) emailInput.value = '';
         if (passwordInput) passwordInput.value = '';
     }
-    
+
     // 清空註冊表單
     const registerForm = document.getElementById('register-form');
     if (registerForm) {
@@ -100,16 +100,16 @@ function showLogin() {
         if (emailInput) emailInput.value = '';
         if (passwordInput) passwordInput.value = '';
     }
-    
+
     // 切換回登入 tab
     const loginTab = document.getElementById('tab-login');
     const registerTab = document.getElementById('tab-register');
-    
+
     if (loginForm && registerForm) {
         loginForm.classList.remove('hidden');
         registerForm.classList.add('hidden');
     }
-    
+
     // 設定按鈕樣式：登入按鈕為橘色
     if (loginTab) {
         loginTab.classList.add('active');
@@ -121,7 +121,7 @@ function showLogin() {
         registerTab.style.backgroundColor = 'transparent';
         registerTab.style.color = '#666';
     }
-    
+
     console.log('✅ 已清空表單欄位');
 }
 
@@ -129,7 +129,7 @@ function showDashboard() {
     const authView = document.getElementById('auth-view');
     const dashboardView = document.getElementById('dashboard-view');
     const coachContainer = document.getElementById('ai-coach-container');
-    
+
     if (authView) authView.classList.add('hidden');
     if (dashboardView) dashboardView.classList.remove('hidden');
     if (coachContainer) coachContainer.classList.remove('hidden');
@@ -160,16 +160,16 @@ function demoLogin() {
 
 async function logout() {
     console.log('👋 登出中...');
-    
+
     if (!isDemoMode) {
         // 呼叫 API 清除 Session
         await fetchPost('logout', {});
     }
-    
+
     // 清除前端狀態
     isDemoMode = false;
     currentUser = null;
-    
+
     // 直接切換回登入頁面（不重新載入）
     showLogin();
 }
@@ -177,24 +177,24 @@ async function logout() {
 // === 表單設置（加強版）===
 function setupForms() {
     console.log('🔧 設置表單事件...');
-    
+
     const loginForm = document.getElementById('login-form');
     const registerForm = document.getElementById('register-form');
     const workoutForm = document.getElementById('add-workout-form');
-    
+
     if (loginForm) {
         // 移除舊的事件監聽器（如果有）
         loginForm.onsubmit = null;
-        
+
         loginForm.addEventListener('submit', handleLogin);
         console.log('✅ 登入表單已綁定');
-        
+
         // 備用：也綁定 onsubmit
         loginForm.onsubmit = handleLogin;
     } else {
         console.error('❌ 找不到 login-form 元素');
     }
-    
+
     if (registerForm) {
         registerForm.onsubmit = null;
         registerForm.addEventListener('submit', handleRegister);
@@ -203,7 +203,7 @@ function setupForms() {
     } else {
         console.error('❌ 找不到 register-form 元素');
     }
-    
+
     if (workoutForm) {
         workoutForm.onsubmit = handleAddWorkout;
         console.log('✅ 運動記錄表單已綁定');
@@ -217,14 +217,14 @@ function switchTab(tab) {
     const regFn = document.getElementById('register-form');
     const loginBtn = document.getElementById('tab-login');
     const registerBtn = document.getElementById('tab-register');
-    
+
     if (!loginFn || !regFn) return;
-    
+
     if (tab === 'login') {
         // 顯示登入表單
         loginFn.classList.remove('hidden');
         regFn.classList.add('hidden');
-        
+
         // 切換按鈕樣式
         if (loginBtn) {
             loginBtn.classList.add('active');
@@ -240,7 +240,7 @@ function switchTab(tab) {
         // 顯示註冊表單
         loginFn.classList.add('hidden');
         regFn.classList.remove('hidden');
-        
+
         // 切換按鈕樣式
         if (loginBtn) {
             loginBtn.classList.remove('active');
@@ -262,13 +262,13 @@ async function handleLogin(e) {
     const form = e.target;
     const emailInput = form.querySelector('input[name="email"]');
     const passwordInput = form.querySelector('input[name="password"]');
-    
+
     if (!emailInput || !passwordInput) {
         console.error('❌ 找不到 email 或 password 欄位');
         alert('表單錯誤，請重新整理頁面');
         return;
     }
-    
+
     const email = emailInput.value.trim();
     const password = passwordInput.value;
 
@@ -285,13 +285,13 @@ async function handleLogin(e) {
 
         if (json.success) {
             console.log('✅ 登入成功，載入使用者資訊...');
-            
+
             // 取得使用者資訊
             const userRes = await fetch(`${API_URL}?action=get_user_info`, {
                 credentials: 'same-origin'
             });
             const userData = await userRes.json();
-            
+
             if (userData.success && userData.data) {
                 console.log('✅ 使用者資訊:', userData.data);
                 currentUser = userData.data;
@@ -317,13 +317,13 @@ async function handleRegister(e) {
     const nameInput = form.querySelector('input[name="display_name"]');
     const emailInput = form.querySelector('input[name="email"]');
     const passwordInput = form.querySelector('input[name="password"]');
-    
+
     if (!nameInput || !emailInput || !passwordInput) {
         console.error('❌ 找不到必要欄位');
         alert('表單錯誤，請重新整理頁面');
         return;
     }
-    
+
     const display_name = nameInput.value.trim();
     const email = emailInput.value.trim();
     const password = passwordInput.value;
@@ -341,13 +341,13 @@ async function handleRegister(e) {
 
         if (json.success) {
             console.log('✅ 註冊成功，載入使用者資訊...');
-            
+
             // 取得使用者資訊
             const userRes = await fetch(`${API_URL}?action=get_user_info`, {
                 credentials: 'same-origin'
             });
             const userData = await userRes.json();
-            
+
             if (userData.success && userData.data) {
                 console.log('✅ 使用者資訊:', userData.data);
                 currentUser = userData.data;
@@ -378,6 +378,12 @@ async function handleAddWorkout(e) {
     const type = form.querySelector('#input-sport').value;
     const minutes = parseInt(form.querySelector('#input-minutes').value) || 0;
     const calories = parseInt(form.querySelector('#input-calories').value) || 0;
+
+    if (!currentUser || !currentUser.height || !currentUser.weight) {
+        alert('請先完善個人資料');
+        showEditProfileModal();
+        return;
+    }
 
     if (!datePart || !timePart || !type || minutes <= 0) {
         alert('請輸入完整資料');
@@ -552,7 +558,7 @@ async function fetchPost(action, data = {}) {
     });
 
     const text = await res.text();
-    
+
     try {
         const json = JSON.parse(text);
         console.log(`📥 API 回應 (${action}):`, json);
@@ -566,16 +572,16 @@ async function fetchPost(action, data = {}) {
 function updateProfileUI() {
     // 更新身高體重顯示
     if (!currentUser) return;
-    
+
     const heightEl = document.getElementById('user-height');
     const weightEl = document.getElementById('user-weight');
-    
+
     if (heightEl && currentUser.height) {
         heightEl.textContent = currentUser.height + ' cm';
     } else if (heightEl) {
         heightEl.textContent = '未設定';
     }
-    
+
     if (weightEl && currentUser.weight) {
         weightEl.textContent = currentUser.weight + ' kg';
     } else if (weightEl) {
@@ -583,127 +589,97 @@ function updateProfileUI() {
     }
 }
 
-// 顯示編輯身高體重彈窗
+async function setupCoachInteraction() {
+    // 確保 AI 教練視窗隱藏
+    const chatWindow = document.getElementById('chat-window');
+    const coachContainer = document.getElementById('ai-coach-container');
+
+    if (chatWindow) chatWindow.style.display = 'none';
+    if (coachContainer) coachContainer.classList.remove('hidden');
+}
+
+// 卡路里計算
+window.calculateCalories = function () {
+    const typeSelect = document.getElementById('input-type');
+    const minutesInput = document.getElementById('input-minutes');
+    const caloriesInput = document.getElementById('input-calories');
+    const calcValDisplay = document.getElementById('calc-val');
+    const displayArea = document.getElementById('calorie-display-area');
+
+    if (!typeSelect || !minutesInput || !caloriesInput) return;
+
+    const type = typeSelect.value;
+    const minutes = parseInt(minutesInput.value) || 0;
+
+    // MET values
+    const MET_VALUES = {
+        '跑步': 10,
+        '重訓': 4,
+        '腳踏車': 8,
+        '游泳': 6,
+        '瑜珈': 3,
+        '其他': 2
+    };
+
+    if (!currentUser || !currentUser.weight) {
+        // 如果沒有體重，隱藏顯示區並不計算
+        displayArea.classList.add('hidden');
+        caloriesInput.value = 0;
+        return;
+    }
+
+    const met = MET_VALUES[type] || 2;
+    const weight = parseFloat(currentUser.weight);
+    const kcal = Math.round(((met * 3.5 * weight) / 200) * minutes);
+
+    calcValDisplay.textContent = kcal;
+    caloriesInput.value = kcal;
+    displayArea.classList.remove('hidden');
+};
+
+// 顯示編輯個人資料彈窗 (名字、身高、體重)
 function showEditProfileModal() {
-    console.log('📝 開啟編輯身高體重彈窗');
-    
-    // 建立彈窗 HTML
+    console.log('📝 開啟編輯個人資料彈窗');
+
     const modal = document.createElement('div');
     modal.id = 'edit-profile-modal';
     modal.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.5);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        z-index: 9999;
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0, 0, 0, 0.5); display: flex;
+        justify-content: center; align-items: center; z-index: 9999;
         animation: fadeIn 0.3s ease;
     `;
-    
+
+    const currentName = currentUser.display_name || '';
     const currentHeight = currentUser.height || '';
     const currentWeight = currentUser.weight || '';
-    
+
     modal.innerHTML = `
-        <div style="
-            background: white;
-            padding: 2rem;
-            border-radius: 16px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-            max-width: 400px;
-            width: 90%;
-            animation: slideUp 0.3s ease;
-        ">
-            <h2 style="margin: 0 0 1.5rem 0; color: #333; font-size: 1.5rem;">
-                ✏️ 編輯個人資料
-            </h2>
+        <div style="background: white; padding: 2rem; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); max-width: 400px; width: 90%; animation: slideUp 0.3s ease;">
+            <h2 style="margin: 0 0 1.5rem 0; color: #333; font-size: 1.5rem;">✏️ 編輯個人資料</h2>
             
             <div style="margin-bottom: 1rem;">
-                <label style="display: block; margin-bottom: 0.5rem; color: #666; font-weight: 600;">
-                    身高 (cm)
-                </label>
-                <input 
-                    type="number" 
-                    id="modal-height" 
-                    value="${currentHeight}"
-                    placeholder="例如：170"
-                    style="
-                        width: 100%;
-                        padding: 0.75rem;
-                        border: 2px solid #ddd;
-                        border-radius: 8px;
-                        font-size: 1rem;
-                        box-sizing: border-box;
-                    "
-                >
+                <label style="display: block; margin-bottom: 0.5rem; color: #666; font-weight: 600;">暱稱</label>
+                <input type="text" id="modal-name" value="${currentName}" style="width: 100%; padding: 0.75rem; border: 2px solid #ddd; border-radius: 8px; font-size: 1rem;">
+            </div>
+
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.5rem; color: #666; font-weight: 600;">身高 (cm)</label>
+                <input type="number" id="modal-height" value="${currentHeight}" placeholder="例如：170" style="width: 100%; padding: 0.75rem; border: 2px solid #ddd; border-radius: 8px; font-size: 1rem;">
             </div>
             
             <div style="margin-bottom: 1.5rem;">
-                <label style="display: block; margin-bottom: 0.5rem; color: #666; font-weight: 600;">
-                    體重 (kg)
-                </label>
-                <input 
-                    type="number" 
-                    id="modal-weight" 
-                    value="${currentWeight}"
-                    placeholder="例如：65"
-                    style="
-                        width: 100%;
-                        padding: 0.75rem;
-                        border: 2px solid #ddd;
-                        border-radius: 8px;
-                        font-size: 1rem;
-                        box-sizing: border-box;
-                    "
-                >
+                <label style="display: block; margin-bottom: 0.5rem; color: #666; font-weight: 600;">體重 (kg)</label>
+                <input type="number" id="modal-weight" value="${currentWeight}" placeholder="例如：65" style="width: 100%; padding: 0.75rem; border: 2px solid #ddd; border-radius: 8px; font-size: 1rem;">
             </div>
             
             <div style="display: flex; gap: 1rem;">
-                <button 
-                    onclick="closeEditProfileModal()"
-                    style="
-                        flex: 1;
-                        padding: 0.75rem;
-                        border: 2px solid #ddd;
-                        border-radius: 8px;
-                        background: white;
-                        color: #666;
-                        font-size: 1rem;
-                        font-weight: 600;
-                        cursor: pointer;
-                        transition: all 0.3s;
-                    "
-                    onmouseover="this.style.background='#f5f5f5'"
-                    onmouseout="this.style.background='white'"
-                >
-                    取消
-                </button>
-                <button 
-                    onclick="saveProfile()"
-                    style="
-                        flex: 1;
-                        padding: 0.75rem;
-                        border: none;
-                        border-radius: 8px;
-                        background: #FF6B35;
-                        color: white;
-                        font-size: 1rem;
-                        font-weight: 600;
-                        cursor: pointer;
-                        transition: all 0.3s;
-                    "
-                    onmouseover="this.style.background='#ff5722'"
-                    onmouseout="this.style.background='#FF6B35'"
-                >
-                    儲存
-                </button>
+                <button onclick="closeEditProfileModal()" style="flex: 1; padding: 0.75rem; border: 2px solid #ddd; border-radius: 8px; background: white; color: #666; font-weight: 600; cursor: pointer;">取消</button>
+                <button onclick="saveProfile()" style="flex: 1; padding: 0.75rem; border: none; border-radius: 8px; background: #FF6B35; color: white; font-weight: 600; cursor: pointer;">儲存</button>
             </div>
         </div>
     `;
-    
+
     // 加入 CSS 動畫
     const style = document.createElement('style');
     style.textContent = `
@@ -717,11 +693,11 @@ function showEditProfileModal() {
         }
     `;
     document.head.appendChild(style);
-    
+
     document.body.appendChild(modal);
-    
+
     // 點擊背景關閉
-    modal.addEventListener('click', function(e) {
+    modal.addEventListener('click', function (e) {
         if (e.target === modal) {
             closeEditProfileModal();
         }
@@ -737,57 +713,61 @@ function closeEditProfileModal() {
     }
 }
 
-// 儲存身高體重
+// 儲存個人資料
 async function saveProfile() {
+    const nameInput = document.getElementById('modal-name');
     const heightInput = document.getElementById('modal-height');
     const weightInput = document.getElementById('modal-weight');
-    
+
+    const display_name = nameInput.value.trim();
     const height = parseFloat(heightInput.value);
     const weight = parseFloat(weightInput.value);
-    
+
+    if (!display_name) {
+        alert('請輸入暱稱');
+        return;
+    }
+
     // 驗證
     if (!height || height <= 0 || height > 300) {
         alert('請輸入有效的身高（1-300 cm）');
         return;
     }
-    
+
     if (!weight || weight <= 0 || weight > 500) {
         alert('請輸入有效的體重（1-500 kg）');
         return;
     }
-    
-    console.log('💾 儲存身高體重:', height, weight);
-    
+
+    console.log('💾 儲存資料:', display_name, height, weight);
+
     try {
         const res = await fetch(`${API_URL}?action=update_profile`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'same-origin',
-            body: JSON.stringify({ height, weight })
+            body: JSON.stringify({ display_name, height, weight })
         });
-        
+
         const json = await res.json();
-        
+
         if (json.success) {
-            console.log('✅ 身高體重已儲存');
-            
-            // 更新前端資料
+            currentUser.display_name = display_name;
             currentUser.height = height;
             currentUser.weight = weight;
-            
-            // 更新顯示
+
+            // 更新 UI
+            const nameEl = document.getElementById('user-display-name');
+            if (nameEl) nameEl.textContent = display_name;
             updateProfileUI();
-            
-            // 關閉彈窗
+
             closeEditProfileModal();
-            
-            alert('✅ 身高體重已更新！');
+            alert('✅ 個人資料已更新！');
         } else {
             alert('儲存失敗: ' + (json.message || '未知錯誤'));
         }
     } catch (err) {
         console.error('❌ 儲存錯誤:', err);
-        alert('連線錯誤: ' + err.message);
     }
 }
 
@@ -805,39 +785,39 @@ function setupCoachInteraction() {
 let currentAvatarIndex = 1;  // 預設頭像編號
 const TOTAL_AVATARS = 11;    // 總共有 11 個頭像
 
-window.changeAvatar = function(direction) {
+window.changeAvatar = function (direction) {
     console.log('切換頭像:', direction);
-    
+
     const avatarImg = document.getElementById('current-avatar');
     if (!avatarImg) {
         console.error('找不到頭像元素');
         return;
     }
-    
+
     // 添加淡出動畫
     avatarImg.style.opacity = '0';
     avatarImg.style.transform = 'scale(0.8)';
-    
+
     setTimeout(() => {
         // 更新頭像索引
         currentAvatarIndex += direction;
-        
+
         // 循環處理
         if (currentAvatarIndex > TOTAL_AVATARS) {
             currentAvatarIndex = 1;
         } else if (currentAvatarIndex < 1) {
             currentAvatarIndex = TOTAL_AVATARS;
         }
-        
+
         // 更新圖片
         avatarImg.src = `public/image/${currentAvatarIndex}.png`;
-        
+
         // 添加淡入動畫
         setTimeout(() => {
             avatarImg.style.opacity = '1';
             avatarImg.style.transform = 'scale(1)';
         }, 50);
-        
+
         // 如果已登入，更新到伺服器
         if (currentUser && !isDemoMode) {
             updateAvatarOnServer(currentAvatarIndex);
@@ -852,9 +832,9 @@ async function updateAvatarOnServer(avatarId) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ avatar_id: avatarId })
         });
-        
+
         const json = await res.json();
-        
+
         if (json.success) {
             console.log('✅ 頭像已更新');
             if (currentUser) {
