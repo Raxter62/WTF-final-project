@@ -98,16 +98,11 @@ function showDashboard() {
 
     updateProfileUI();
 
-    const saved = localStorage.getItem(`avatar_${currentUser.id}`);
-    const defaultAvatar = 'public/image/1.png';
+    // 載入用戶頭像
+    currentAvatarIndex = currentUser.avatar_id || 1;
     const avatarImg = document.getElementById('current-avatar');
-
     if (avatarImg) {
-        if (saved && saved.includes('public/image/')) {
-            avatarImg.src = saved;
-        } else {
-            avatarImg.src = defaultAvatar;
-        }
+        avatarImg.src = `public/image/${currentAvatarIndex}.png`;
     }
 
     setGlobalRange('1d');
@@ -122,8 +117,18 @@ function demoLogin() {
 
 async function logout() {
     console.log('👋 登出中...');
-    if (!isDemoMode) await fetchPost('logout', {});
-    location.reload();
+    
+    if (!isDemoMode) {
+        // 呼叫 API 清除 Session
+        await fetchPost('logout', {});
+    }
+    
+    // 清除前端狀態
+    isDemoMode = false;
+    currentUser = null;
+    
+    // 直接切換回登入頁面（不重新載入）
+    showLogin();
 }
 
 // === 表單設置（加強版）===
@@ -208,8 +213,21 @@ async function handleLogin(e) {
         console.log('📥 登入回應:', json);
 
         if (json.success) {
-            console.log('✅ 登入成功，重新載入頁面');
-            location.reload();
+            console.log('✅ 登入成功，載入使用者資訊...');
+            
+            // 取得使用者資訊
+            const userRes = await fetch(`${API_URL}?action=get_user_info`, {
+                credentials: 'same-origin'
+            });
+            const userData = await userRes.json();
+            
+            if (userData.success && userData.data) {
+                console.log('✅ 使用者資訊:', userData.data);
+                currentUser = userData.data;
+                showDashboard();
+            } else {
+                alert('無法取得使用者資訊');
+            }
         } else {
             console.error('❌ 登入失敗:', json.message);
             alert('登入失敗: ' + (json.message || '帳號或密碼錯誤'));
@@ -251,8 +269,21 @@ async function handleRegister(e) {
         console.log('📥 註冊回應:', json);
 
         if (json.success) {
-            console.log('✅ 註冊成功，重新載入頁面');
-            location.reload();
+            console.log('✅ 註冊成功，載入使用者資訊...');
+            
+            // 取得使用者資訊
+            const userRes = await fetch(`${API_URL}?action=get_user_info`, {
+                credentials: 'same-origin'
+            });
+            const userData = await userRes.json();
+            
+            if (userData.success && userData.data) {
+                console.log('✅ 使用者資訊:', userData.data);
+                currentUser = userData.data;
+                showDashboard();
+            } else {
+                alert('無法取得使用者資訊');
+            }
         } else {
             console.error('❌ 註冊失敗:', json.message);
             alert('註冊失敗: ' + (json.message || '未知錯誤'));
@@ -471,6 +502,75 @@ function generateAvatarGrid() {
 
 function setupCoachInteraction() {
     // AI 教練
+}
+
+// ========== 頭像功能 ==========
+
+// 全域變數
+let currentAvatarIndex = 1;  // 預設頭像編號
+const TOTAL_AVATARS = 11;    // 總共有 11 個頭像
+
+window.changeAvatar = function(direction) {
+    console.log('切換頭像:', direction);
+    
+    const avatarImg = document.getElementById('current-avatar');
+    if (!avatarImg) {
+        console.error('找不到頭像元素');
+        return;
+    }
+    
+    // 添加淡出動畫
+    avatarImg.style.opacity = '0';
+    avatarImg.style.transform = 'scale(0.8)';
+    
+    setTimeout(() => {
+        // 更新頭像索引
+        currentAvatarIndex += direction;
+        
+        // 循環處理
+        if (currentAvatarIndex > TOTAL_AVATARS) {
+            currentAvatarIndex = 1;
+        } else if (currentAvatarIndex < 1) {
+            currentAvatarIndex = TOTAL_AVATARS;
+        }
+        
+        // 更新圖片
+        avatarImg.src = `public/image/${currentAvatarIndex}.png`;
+        
+        // 添加淡入動畫
+        setTimeout(() => {
+            avatarImg.style.opacity = '1';
+            avatarImg.style.transform = 'scale(1)';
+        }, 50);
+        
+        // 如果已登入，更新到伺服器
+        if (currentUser && !isDemoMode) {
+            updateAvatarOnServer(currentAvatarIndex);
+        }
+    }, 200);
+};
+
+async function updateAvatarOnServer(avatarId) {
+    try {
+        const res = await fetch(`${API_URL}?action=update_avatar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ avatar_id: avatarId })
+        });
+        
+        const json = await res.json();
+        
+        if (json.success) {
+            console.log('✅ 頭像已更新');
+            if (currentUser) {
+                currentUser.avatar_id = avatarId;
+            }
+        } else {
+            console.error('❌ 頭像更新失敗:', json.message);
+        }
+    } catch (err) {
+        console.error('❌ 頭像更新錯誤:', err);
+    }
 }
 
 console.log('✅ main.js 載入完成');

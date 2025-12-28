@@ -5,22 +5,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FitConnect 運動平台</title>
-    <link rel="icon" href="public/image/logo/logo.png">
     <link rel="manifest" href="manifest.json">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <link rel="stylesheet" href="public/css/style.css">
     <style>
-        /* ===== 確保 hidden class 正常運作 ===== */
-        .hidden {
-            display: none !important;
-        }
-        
         /* 表單容器整體動畫 */
         #login-form,
         #register-form {
             transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
-                transform 0.6s cubic-bezier(0.16, 1, 0.3, 1),
-                filter 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+                        transform 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+                        filter 0.6s cubic-bezier(0.16, 1, 0.3, 1);
             transform-origin: center;
             will-change: opacity, transform;
         }
@@ -55,7 +50,6 @@
                 transform: translateX(40px) scale(0.92);
                 filter: blur(4px);
             }
-
             100% {
                 opacity: 1;
                 transform: translateX(0) scale(1);
@@ -105,7 +99,6 @@
                 opacity: 0;
                 transform: translateY(15px);
             }
-
             100% {
                 opacity: 1;
                 transform: translateY(0);
@@ -173,6 +166,7 @@
         }
 
         .form-control:focus {
+            transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
         }
 
@@ -216,12 +210,9 @@
 
         /* 綁定碼動畫 */
         @keyframes pulse {
-
-            0%,
-            100% {
+            0%, 100% {
                 transform: scale(1);
             }
-
             50% {
                 transform: scale(1.05);
             }
@@ -232,7 +223,6 @@
                 opacity: 0;
                 transform: translateY(20px);
             }
-
             to {
                 opacity: 1;
                 transform: translateY(0);
@@ -271,33 +261,34 @@
                 <img src="public/image/logo/logoremovebg.png" alt="Logo" style="height: 60px; width: auto;">
                 FitConnect
             </h1>
-            <div style="display: flex; justify-content: center; gap: 10px; margin-bottom: 2rem;">
-                <button class="btn-primary" style="padding: 0.5rem 1.5rem;" onclick="switchTab('login')">登入</button>
-                <button class="btn-primary"
-                    style="padding: 0.5rem 1.5rem; background: #eee; color: #333; box-shadow: none;"
-                    onclick="switchTab('register')">註冊</button>
+            <div class="tab-buttons">
+                <button class="btn-primary tab-btn active" id="tab-login" onclick="switchTab('login')">登入</button>
+                <button class="btn-primary tab-btn" id="tab-register" onclick="switchTab('register')">註冊</button>
             </div>
 
-            <form id="login-form">
-                <label class="form-label">Email</label>
-                <input type="email" class="form-control" name="email" required>
-                <label class="form-label">密碼</label>
-                <input type="password" class="form-control" name="password" required>
-                <button type="submit" class="btn-primary" style="width: 100%;">登入</button>
-                <p style="text-align: center; margin-top: 1rem; cursor: pointer; color: #999;" onclick="demoLogin()">
-                    Demo 模式登入</p>
-            </form>
+            <div style="position: relative; min-height: 240px;">
+                <form id="login-form">
+                    <label class="form-label">Email</label>
+                    <input type="email" id="login-email" class="form-control" name="email" required>
+                    <label class="form-label">密碼</label>
+                    <input type="password" id="login-password" class="form-control" name="password" required>
+                    <button type="submit" class="btn-primary" style="width: 100%; margin-top: 0.5rem;">登入</button>
+                    <p style="text-align: center; margin-top: 1rem; cursor: pointer; color: #999; font-size: 0.9rem;" onclick="demoLogin()">
+                        Demo 模式登入
+                    </p>
+                </form>
 
-            <form id="register-form" class="hidden">
-                <label class="form-label">暱稱</label>
-                <input type="text" class="form-control" name="display_name" required>
-                <label class="form-label">Email</label>
-                <input type="email" class="form-control" name="email" required>
-                <label class="form-label">密碼</label>
-                <input type="password" class="form-control" name="password" required>
-                <button type="submit" class="btn-primary" style="width: 100%;">註冊</button>
-            </form>
-            <div id="auth-msg" style="text-align: center; margin-top: 10px; color: red;"></div>
+                <form id="register-form" class="hidden">
+                    <label class="form-label">暱稱</label>
+                    <input type="text" id="register-display-name" class="form-control" name="display_name" required>
+                    <label class="form-label">Email</label>
+                    <input type="email" id="register-email" class="form-control" name="email" required>
+                    <label class="form-label">密碼</label>
+                    <input type="password" id="register-password" class="form-control" name="password" required>
+                    <button type="submit" class="btn-primary" style="width: 100%; margin-top: 0.5rem;">註冊</button>
+                </form>
+            </div>
+            <div id="auth-msg" style="text-align: center; margin-top: 0.5rem; color: red;"></div>
         </div>
     </div>
 
@@ -323,43 +314,16 @@
         <!-- Hero: 左大頭貼 右輸入 -->
         <section id="section-hero" class="container hero-container">
             <!-- 左 -->
-            <!-- 左 -->
             <div class="hero-left">
                 <div class="avatar-wrapper">
                     <div class="avatar-arrow left" onclick="changeAvatar(-1)">❮</div>
                     <img src="public/image/1.png" id="current-avatar" class="avatar-img" alt="Avatar">
                     <div class="avatar-arrow right" onclick="changeAvatar(1)">❯</div>
                 </div>
-
-                <!-- Profile View Mode -->
-                <div id="profile-view" style="text-align: center;">
-                    <div
-                        style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 1rem;">
-                        <h2 id="profile-name" style="margin: 0; font-size: 2.5rem;">User</h2>
-                        <span style="cursor: pointer; font-size: 1.5rem; color: #f1efef;"
-                            onclick="enableProfileEdit()">✎</span>
-                    </div>
-                    <div style="margin-top: 10px; color: var(--secondary); font-size: 1.2rem;">
-                        <span id="profile-height">--</span> cm / <span id="profile-weight">--</span> kg
-                    </div>
-                </div>
-
-                <!-- Profile Edit Mode -->
-                <div id="profile-edit" class="hidden" style="text-align: center; margin-top: 1rem; width: 80%;">
-                    <input type="text" id="edit-display-name" class="form-control" placeholder="暱稱"
-                        style="text-align: center; font-size: 1.5rem; font-weight: bold; margin-bottom: 10px;">
-                    <div style="display: flex; gap: 10px;">
-                        <input type="number" id="edit-height" class="form-control" placeholder="身高(cm)"
-                            style="text-align: center;">
-                        <input type="number" id="edit-weight" class="form-control" placeholder="體重(kg)"
-                            style="text-align: center;">
-                    </div>
-                    <div style="display: flex; gap: 10px; justify-content: center; margin-top: 10px;">
-                        <button class="btn-primary" style="padding: 5px 20px; font-size: 1rem;"
-                            onclick="saveProfile()">儲存</button>
-                        <button class="btn-primary" style="padding: 5px 20px; font-size: 1rem; background: #999;"
-                            onclick="cancelProfileEdit()">取消</button>
-                    </div>
+                <div style="display: flex; align-items: center; gap: 10px; margin-top: 1rem;">
+                    <h2 id="user-display-name" style="margin: 0; font-size: 4rem;">User</h2>
+                    <span style="cursor: pointer; font-size: 1.5rem; color: #f1efef;"
+                        onclick="enableNameEdit()">✎</span>
                 </div>
             </div>
             <!-- 右 -->
@@ -500,86 +464,48 @@
                     </tbody>
                 </table>
             </div>
-        </section>
 
-
-
-
-        <!-- Wave Divider (Blue) -->
-        <div class="wave-divider" style="height: 120px; margin-bottom: 0; position: relative; z-index: 20;">
-            <svg class="waves" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
-                viewBox="0 24 150 28" preserveAspectRatio="none" shape-rendering="auto">
-                <defs>
-                    <path id="gentle-wave3"
-                        d="M-160 44c30 0 58-18 88-18s 58 18 88 18 58-18 88-18 58 18 88 18 v44h-352z" />
-                </defs>
-                <g class="parallax">
-                    <use xlink:href="#gentle-wave3" x="48" y="0" />
-                    <use xlink:href="#gentle-wave3" x="48" y="3" />
-                    <use xlink:href="#gentle-wave3" x="48" y="5" />
-                    <use xlink:href="#gentle-wave3" x="48" y="7" />
-                </g>
-            </svg>
-        </div>
-
-        <!-- LINE 綁定區塊 -->
-        <section id="section-line-binding"
-            style="width: 100%; padding: 150px 20px 100px; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(10px); margin-top: -120px; position: relative; z-index: 10;">
-            <div
-                style="margin-top: 3rem; padding: 2rem; background: rgba(255,255,255,0.95); border-radius: 20px; backdrop-filter: blur(10px); border: 1px solid rgba(0,0,0,0.1); box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 1200px; margin-left: auto; margin-right: auto;">
-                <h3
-                    style="margin: 0 0 1.5rem 0; color: #333; font-size: 1.5rem; display: flex; align-items: center; gap: 10px; font-weight: bold; justify-content: center;">
+            <!-- LINE 綁定區塊 -->
+            <div style="margin-top: 3rem; padding: 2rem; background: rgba(255,255,255,0.95); border-radius: 20px; backdrop-filter: blur(10px); border: 1px solid rgba(0,0,0,0.1); box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 1200px; margin-left: auto; margin-right: auto;">
+                <h3 style="margin: 0 0 1.5rem 0; color: #333; font-size: 1.5rem; display: flex; align-items: center; gap: 10px; font-weight: bold; justify-content: center;">
                     <span style="font-size: 2rem;">📱</span> LINE 綁定
                 </h3>
-
-                <!-- ... existing LINE content ... -->
                 <div id="line-bind-status">
                     <!-- 未綁定狀態 -->
                     <div id="not-bound">
-                        <p style="color: #555; margin-bottom: 1.5rem; font-size: 1rem; text-align: center;">綁定 LINE
-                            後可接收運動提醒
-                        </p>
+                        <p style="color: #555; margin-bottom: 1.5rem; font-size: 1rem; text-align: center;">綁定 LINE 後可接收運動提醒</p>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: start;">
                             <!-- 左側：按鈕和說明 -->
                             <div>
-                                <button onclick="generateBindCode()" class="btn-primary"
-                                    style="width: 100%; margin-bottom: 1rem;">
+                                <button onclick="generateBindCode()" class="btn-primary" style="width: 100%; margin-bottom: 1rem;">
                                     產生綁定碼
                                 </button>
-                                <div
-                                    style="background: rgba(102, 126, 234, 0.1); padding: 1.5rem; border-radius: 12px; border-left: 4px solid #667eea;">
+                                <div style="background: rgba(102, 126, 234, 0.1); padding: 1.5rem; border-radius: 12px; border-left: 4px solid #667eea;">
                                     <p style="color: #333; font-size: 0.95rem; margin: 0; line-height: 1.6;">
                                         <strong style="color: #667eea;">📌 使用方式：</strong><br>
                                         1️⃣ 點擊「產生綁定碼」按鈕<br>
-                                        2️⃣ 掃描 QR Code 或加入 LINE ID: <strong
-                                            style="color: #667eea;">@063jezzz</strong><br>
+                                        2️⃣ 掃描 QR Code 或加入 LINE ID: <strong style="color: #667eea;">@063jezzz</strong><br>
                                         3️⃣ 在 LINE Bot 中輸入綁定碼
                                     </p>
                                 </div>
                             </div>
-
+                            
                             <!-- 右側：QR Code 和綁定碼 -->
                             <div id="bind-code-display" style="display: none; text-align: center;">
-                                <div
-                                    style="background: #fff; padding: 2rem; border-radius: 10px; margin-bottom: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                                <div style="background: #fff; padding: 2rem; border-radius: 10px; margin-bottom: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
                                     <div id="qrcode" style="display: inline-block;"></div>
                                 </div>
-                                <div
-                                    style="background: #667eea; padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem; border: 2px solid rgba(255,255,255,0.3);">
-                                    <p style="color: #fff; margin: 0 0 0.5rem 0; font-size: 1rem; font-weight: bold;">
-                                        綁定碼（10分鐘內有效）</p>
-                                    <p id="bind-code-text"
-                                        style="color: #feca57; font-size: 2.5rem; font-weight: bold; margin: 0; letter-spacing: 5px; text-shadow: 0 2px 4px rgba(0,0,0,0.3);">
-                                        ------</p>
+                                <div style="background: #667eea; padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem; border: 2px solid rgba(255,255,255,0.3);">
+                                    <p style="color: #fff; margin: 0 0 0.5rem 0; font-size: 1rem; font-weight: bold;">綁定碼（10分鐘內有效）</p>
+                                    <p id="bind-code-text" style="color: #feca57; font-size: 2.5rem; font-weight: bold; margin: 0; letter-spacing: 5px; text-shadow: 0 2px 4px rgba(0,0,0,0.3);">------</p>
                                 </div>
                             </div>
                         </div>
                     </div>
-
+                    
                     <!-- 已綁定狀態 -->
                     <div id="already-bound" style="display: none; text-align: center;">
-                        <p
-                            style="color: #22c55e; margin-bottom: 1rem; display: flex; align-items: center; gap: 8px; font-size: 1.1rem; font-weight: bold; justify-content: center;">
+                        <p style="color: #22c55e; margin-bottom: 1rem; display: flex; align-items: center; gap: 8px; font-size: 1.1rem; font-weight: bold; justify-content: center;">
                             <span style="font-size: 1.3rem;">✓</span> 已綁定 LINE
                         </p>
                         <button onclick="unbindLine()" class="btn-primary" style="width: 50%; background: #ef4444;">
@@ -589,227 +515,85 @@
                 </div>
             </div>
         </section>
-        <!-- Coach 半身像 -->
-        <div id="ai-coach-container" class="hidden">
-            <div class="coach-img-wrapper" onclick="toggleChat()"
-                onmouseover="document.querySelector('.coach-full-img').src='public/image/tinin2.png'"
-                onmouseout="document.querySelector('.coach-full-img').src='public/image/tinin.png'">
-                <div class="coach-bubble" id="coach-bubble">今天想練什麼呢？</div>
-                <img src="public/image/tinin.png" class="coach-full-img" alt="AI Coach">
-            </div>
+
+    </div>
+
+    <!-- Coach 半身像 -->
+    <div id="ai-coach-container" class="hidden">
+        <div class="coach-img-wrapper" onclick="toggleChat()"
+            onmouseover="document.querySelector('.coach-full-img').src='public/image/tinin2.png'"
+            onmouseout="document.querySelector('.coach-full-img').src='public/image/tinin.png'">
+            <div class="coach-bubble" id="coach-bubble">今天想練什麼呢？</div>
+            <img src="public/image/tinin.png" class="coach-full-img" alt="AI Coach">
         </div>
+    </div>
 
-        <!-- Chat Window (Absolute) -->
-        <div id="chat-window">
-            <div class="chat-header">
-                <strong>AI 教練</strong>
-            </div>
-            <div id="chat-messages">
-                <div class="chat-msg ai">嗨！我是你的專屬教練。</div>
-            </div>
-            <div class="chat-input-area">
-                <input type="text" id="chat-input" class="form-control" placeholder="問我...">
-                <button onclick="sendChatMessage()">➤</button>
-            </div>
+    <!-- Chat Window (Absolute) -->
+    <div id="chat-window">
+        <div class="chat-header">
+            <strong>AI 教練</strong>
         </div>
+        <div id="chat-messages">
+            <div class="chat-msg ai">嗨！我是你的專屬教練。</div>
+        </div>
+        <div class="chat-input-area">
+            <input type="text" id="chat-input" class="form-control" placeholder="問我...">
+            <button onclick="sendChatMessage()">➤</button>
+        </div>
+    </div>
 
 
 
-        <!-- ✅ 防呆：就算被舊快取 main.js 影響，也不會因 isDemoMode 未宣告而整站掛掉 -->
-        <script>
-            window.isDemoMode = (typeof window.isDemoMode !== "undefined") ? window.isDemoMode : false;
-        </script>
-
-        <!-- ✅ cache bust：立刻繞過舊 SW 快取的 main.js -->
-        <script src="public/js/main.js?v=20251228_1"></script>
+    <!-- Scripts -->
+    <script src="public/js/main.js"></script>
+    
+    <!-- 🛡️ 禁用自動登入並重寫登入邏輯 -->
+    <script>
+    (function() {
+        console.log('🛡️ 禁用自動登入系統啟動');
         
-        <!-- 🛡️ 強制初始狀態：確保顯示登入頁面 -->
-        <script>
-        (function() {
-            console.log('🛡️ 設定初始狀態：顯示登入頁面');
-            
+        // ===== 1. 覆蓋 checkLogin 函數，禁用自動登入 =====
+        window.checkLogin = function() {
+            console.log('⛔ checkLogin 已被覆蓋 - 不執行自動登入');
             // 強制顯示登入頁面
             const authView = document.getElementById('auth-view');
-            if (authView) {
-                authView.classList.remove('hidden');
-                console.log('✅ 登入頁面已顯示');
-            }
-            
-            // 強制隱藏儀表板
             const dashboardView = document.getElementById('dashboard-view');
-            if (dashboardView) {
-                dashboardView.classList.add('hidden');
-                console.log('✅ 儀表板已隱藏');
-            }
-            
-            // 隱藏 AI Coach
             const coachContainer = document.getElementById('ai-coach-container');
-            if (coachContainer) {
-                coachContainer.classList.add('hidden');
-            }
             
-            console.log('✅ 初始狀態設定完成');
-            console.log('⏳ main.js 的 checkLogin() 將會根據 Session 決定是否自動登入');
-        })();
-        </script>
+            if (authView) authView.classList.remove('hidden');
+            if (dashboardView) dashboardView.classList.add('hidden');
+            if (coachContainer) coachContainer.classList.add('hidden');
+        };
         
-        <!-- 🔧 緊急修復腳本：確保表單綁定 -->
-        <script>
-        (function() {
-            console.log('🔧 執行緊急修復腳本...');
+        // ===== 2. 確保初始顯示登入頁面 =====
+        function forceLoginPage() {
+            const authView = document.getElementById('auth-view');
+            const dashboardView = document.getElementById('dashboard-view');
+            const coachContainer = document.getElementById('ai-coach-container');
             
-            // 等待 DOM 完全載入
-            function fixForms() {
-                console.log('🔧 開始修復表單綁定...');
-                
-                const loginForm = document.getElementById('login-form');
-                const registerForm = document.getElementById('register-form');
-                
-                if (loginForm && !loginForm.onsubmit) {
-                    console.log('⚠️ 登入表單未綁定，現在修復...');
-                    
-                    loginForm.onsubmit = async function(e) {
-                        e.preventDefault();
-                        console.log('🔐 [緊急修復] 處理登入...');
-                        
-                        const email = this.querySelector('input[name="email"]').value.trim();
-                        const password = this.querySelector('input[name="password"]').value;
-                        
-                        if (!email || !password) {
-                            alert('請輸入 Email 與密碼');
-                            return;
-                        }
-                        
-                        try {
-                            const res = await fetch('submit.php?action=login', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                credentials: 'same-origin',
-                                body: JSON.stringify({ 
-                                    action: 'login',
-                                    email, 
-                                    password 
-                                })
-                            });
-                            
-                            const text = await res.text();
-                            const json = JSON.parse(text);
-                            
-                            console.log('📥 登入回應:', json);
-                            
-                            if (json.success) {
-                                console.log('✅ 登入成功，重新載入頁面...');
-                                location.reload();
-                            } else {
-                                alert('登入失敗: ' + (json.message || '帳號或密碼錯誤'));
-                            }
-                        } catch (err) {
-                            console.error('❌ 登入錯誤:', err);
-                            alert('連線錯誤: ' + err.message);
-                        }
-                    };
-                    
-                    console.log('✅ 登入表單已修復');
-                } else if (loginForm) {
-                    console.log('✅ 登入表單已經綁定');
-                }
-                
-                if (registerForm && !registerForm.onsubmit) {
-                    console.log('⚠️ 註冊表單未綁定，現在修復...');
-                    
-                    registerForm.onsubmit = async function(e) {
-                        e.preventDefault();
-                        console.log('📝 [緊急修復] 處理註冊...');
-                        
-                        const display_name = this.querySelector('input[name="display_name"]').value.trim();
-                        const email = this.querySelector('input[name="email"]').value.trim();
-                        const password = this.querySelector('input[name="password"]').value;
-                        
-                        if (!display_name || !email || !password) {
-                            alert('請輸入暱稱、Email 與密碼');
-                            return;
-                        }
-                        
-                        try {
-                            const res = await fetch('submit.php?action=register', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                credentials: 'same-origin',
-                                body: JSON.stringify({ 
-                                    action: 'register',
-                                    display_name, 
-                                    email, 
-                                    password 
-                                })
-                            });
-                            
-                            const text = await res.text();
-                            const json = JSON.parse(text);
-                            
-                            console.log('📥 註冊回應:', json);
-                            
-                            if (json.success) {
-                                console.log('✅ 註冊成功，重新載入頁面...');
-                                location.reload();
-                            } else {
-                                alert('註冊失敗: ' + (json.message || '未知錯誤'));
-                            }
-                        } catch (err) {
-                            console.error('❌ 註冊錯誤:', err);
-                            alert('連線錯誤: ' + err.message);
-                        }
-                    };
-                    
-                    console.log('✅ 註冊表單已修復');
-                } else if (registerForm) {
-                    console.log('✅ 註冊表單已經綁定');
-                }
-            }
+            if (authView) authView.classList.remove('hidden');
+            if (dashboardView) dashboardView.classList.add('hidden');
+            if (coachContainer) coachContainer.classList.add('hidden');
             
-            // 多次嘗試修復
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', function() {
-                    setTimeout(fixForms, 100);
-                    setTimeout(fixForms, 500);
-                    setTimeout(fixForms, 1000);
-                });
-            } else {
-                setTimeout(fixForms, 100);
-                setTimeout(fixForms, 500);
-                setTimeout(fixForms, 1000);
-            }
-        })();
-        </script>
-
-        <script src="public/js/bg-effects.js"></script>
-        <script src="public/js/ai_chat.js"></script>
-
-        <!-- ✅ SW 註冊（自動更新 + 立即啟用 + 接管後自動 reload） -->
-        <script>
-            if ('serviceWorker' in navigator) {
-                window.addEventListener('load', async () => {
-                    try {
-                        const reg = await navigator.serviceWorker.register('./service-worker.js');
-                        console.log('SW registered!', reg);
-
-                        if (reg.update) await reg.update();
-
-                        if (reg.waiting) {
-                            reg.waiting.postMessage('SKIP_WAITING');
-                        }
-
-                        let reloaded = false;
-                        navigator.serviceWorker.addEventListener('controllerchange', () => {
-                            if (reloaded) return;
-                            reloaded = true;
-                            window.location.reload();
-                        });
-                    } catch (err) {
-                        console.log('SW failed!', err);
-                    }
-                });
-            }
-        </script>
+            console.log('✅ 強制顯示登入頁面');
+        }
+        
+        // 立即執行
+        forceLoginPage();
+        
+        console.log('✅ 自動登入已禁用');
+    })();
+    </script>
+    
+    <script src="public/js/bg-effects.js"></script>
+    <script src="public/js/ai_chat.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./service-worker.js')
+                .then(reg => console.log('SW registered!', reg))
+                .catch(err => console.log('SW failed!', err))
+        }
+    </script>
 </body>
 
 </html>
