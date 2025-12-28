@@ -3,7 +3,7 @@
 
 // 每次你更新前端資源（main.js / css / html），把版本號改一下即可。
 // 這不會改變任何功能，只是讓瀏覽器知道要更新快取。
-const CACHE_VERSION = 'v2-2025-12-28-1';
+const CACHE_VERSION = 'v3-2025-12-28-fixed-login-buttons';
 const CACHE_NAME = `fitconnect-${CACHE_VERSION}`;
 
 const ASSETS_TO_CACHE = [

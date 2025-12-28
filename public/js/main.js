@@ -14,11 +14,14 @@ const SPORT_ICONS = {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-    checkLogin();
-    setupForms();
-    setupForms();
-    generateAvatarGrid();
-    setupCoachInteraction();
+    console.log('✅ DOM 載入完成，準備初始化...');
+    
+    // 延遲 100ms 確保所有元素都已完全載入
+    setTimeout(() => {
+        checkLogin();
+        setupForms(); // 只保留一次
+        generateAvatarGrid();
+        setupCoachInteraction();
 
     // 預設日期與時間
     const datePart = document.getElementById('input-date-part');
@@ -34,6 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
         datePart.value = `${year}-${month}-${day}`;
         timePart.value = `${hours}:${minutes}`;
     }
+    }, 100); // 延遲 100ms
 });
 
 // --- Auth ---
@@ -97,9 +101,32 @@ async function logout() {
 
 // --- 表單/互動 ---
 function setupForms() {
-    document.getElementById('login-form').onsubmit = handleLogin;
-    document.getElementById('register-form').onsubmit = handleRegister;
-    document.getElementById('add-workout-form').onsubmit = handleAddWorkout;
+    console.log('🔧 開始設置表單...');
+    
+    const loginForm = document.getElementById('login-form');
+    const registerForm = document.getElementById('register-form');
+    const workoutForm = document.getElementById('add-workout-form');
+    
+    if (loginForm) {
+        loginForm.onsubmit = handleLogin;
+        console.log('✅ 登入表單已綁定');
+    } else {
+        console.error('❌ 找不到 login-form 元素');
+    }
+    
+    if (registerForm) {
+        registerForm.onsubmit = handleRegister;
+        console.log('✅ 註冊表單已綁定');
+    } else {
+        console.error('❌ 找不到 register-form 元素');
+    }
+    
+    if (workoutForm) {
+        workoutForm.onsubmit = handleAddWorkout;
+        console.log('✅ 運動記錄表單已綁定');
+    } else {
+        console.warn('⚠️  找不到 add-workout-form（可能在儀表板頁面）');
+    }
 }
 
 function switchTab(tab) {

@@ -1,5 +1,5 @@
 <?php
-// submit.php - 主要 API 入口點
+// submit.php - Main API endpoint
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/LLM/coach.php';
 
@@ -23,23 +23,23 @@ $input  = getJsonInput();
 $action = $input['action'] ?? ($_GET['action'] ?? '');
 
 if (!$pdo) {
-    sendResponse(['success' => false, 'message' => 'DB 連線失敗']);
+    sendResponse(['success' => false, 'message' => 'DB connection failed']);
 }
 
-// --- 驗證相關動作 ---
+// === Authentication Actions ===
 if ($action === 'register') {
     $email = trim($input['email'] ?? '');
     $pass  = $input['password'] ?? '';
     $name  = trim($input['display_name'] ?? 'User');
 
     if ($email === '' || $pass === '') {
-        sendResponse(['success' => false, 'message' => '請輸入 Email 和密碼']);
+        sendResponse(['success' => false, 'message' => 'Please enter email and password']);
     }
 
     $stmt = $pdo->prepare('SELECT id FROM users WHERE email = :email LIMIT 1');
     $stmt->execute([':email' => $email]);
     if ($stmt->fetch()) {
-        sendResponse(['success' => false, 'message' => '此 Email 已被註冊']);
+        sendResponse(['success' => false, 'message' => 'This email is already registered']);
     }
 
     $hash = password_hash($pass, PASSWORD_DEFAULT);
@@ -55,13 +55,13 @@ if ($action === 'register') {
         $row = $stmt->fetch();
         $userId = isset($row['id']) ? (int) $row['id'] : 0;
         if ($userId <= 0) {
-            sendResponse(['success' => false, 'message' => '註冊成功但取得ID失敗']);
+            sendResponse(['success' => false, 'message' => 'Registration successful but failed to get ID']);
         }
         $_SESSION['user_id'] = $userId;
         sendResponse(['success' => true]);
     }
 
-    sendResponse(['success' => false, 'message' => '註冊失敗']);
+    sendResponse(['success' => false, 'message' => 'Registration failed']);
 }
 
 if ($action === 'login') {
@@ -69,7 +69,7 @@ if ($action === 'login') {
     $pass  = $input['password'] ?? '';
 
     if ($email === '' || $pass === '') {
-        sendResponse(['success' => false, 'message' => '請輸入 Email 和密碼']);
+        sendResponse(['success' => false, 'message' => 'Please enter email and password']);
     }
 
     $stmt = $pdo->prepare('SELECT id, password_hash, display_name FROM users WHERE email = :email LIMIT 1');
@@ -84,7 +84,7 @@ if ($action === 'login') {
         ]);
     }
 
-    sendResponse(['success' => false, 'message' => '帳號或密碼錯誤']);
+    sendResponse(['success' => false, 'message' => 'Incorrect email or password']);
 }
 
 if ($action === 'logout') {
@@ -92,20 +92,20 @@ if ($action === 'logout') {
     sendResponse(['success' => true]);
 }
 
-// --- 之後的動作都需要登入 ---
+// === All actions below require login ===
 if (!isset($_SESSION['user_id'])) {
-    sendResponse(['success' => false, 'message' => '尚未登入']);
+    sendResponse(['success' => false, 'message' => 'Not logged in']);
 }
 $userId = (int) $_SESSION['user_id'];
 
-// --- 需登入後的動作 ---
+// === Logged-in Actions ===
 if ($action === 'get_user_info') {
     $stmt = $pdo->prepare('SELECT id, display_name, email, line_user_id, height, weight, avatar_id FROM users WHERE id = :id');
     $stmt->execute([':id' => $userId]);
     $data = $stmt->fetch();
 
     if (!$data) {
-        sendResponse(['success' => false, 'message' => '找不到使用者']);
+        sendResponse(['success' => false, 'message' => 'User not found']);
     }
 
     if (!isset($data['avatar_id'])) {
@@ -133,7 +133,7 @@ if ($action === 'update_profile') {
         sendResponse(['success' => true]);
     }
 
-    sendResponse(['success' => false, 'message' => '更新失敗']);
+    sendResponse(['success' => false, 'message' => 'Update failed']);
 }
 
 if ($action === 'add_workout') {
@@ -163,12 +163,12 @@ if ($action === 'add_workout') {
                 ':calories' => $calories,
             ]);
         } catch (PDOException $e) {
-            // 不影響主流程
+            // Don't affect main flow
         }
         sendResponse(['success' => true]);
     }
 
-    sendResponse(['success' => false, 'message' => '寫入失敗']);
+    sendResponse(['success' => false, 'message' => 'Write failed']);
 }
 
 if ($action === 'get_stats') {
@@ -269,7 +269,7 @@ if ($action === 'get_leaderboard') {
         SELECT u.display_name, SUM(w.minutes) AS total
         FROM workouts w
         JOIN users u ON w.user_id = u.id
-        WHERE w.date >= CURRENT_DATE - INTERVAL \"30 days\"
+        WHERE w.date >= CURRENT_DATE - INTERVAL \'30 days\'
         GROUP BY u.id, u.display_name
         ORDER BY total DESC
         LIMIT 10
@@ -290,7 +290,7 @@ if ($action === 'generate_bind_code') {
     $sql = '
         UPDATE users
         SET line_bind_code = :code,
-            line_bind_code_expires_at = NOW() + INTERVAL \"10 minutes\"
+            line_bind_code_expires_at = NOW() + INTERVAL \'10 minutes\'
         WHERE id = :id
     ';
     $stmt = $pdo->prepare($sql);
