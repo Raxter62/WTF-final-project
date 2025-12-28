@@ -544,46 +544,50 @@
 
 
 
+
     <!-- Scripts -->
-    <script src="public/js/main.js"></script>
     
-    <!-- 🛡️ 禁用自動登入並重寫登入邏輯 -->
+    <!-- 🛡️ 禁用自動登入（必須在 main.js 之前）-->
     <script>
     (function() {
         console.log('🛡️ 禁用自動登入系統啟動');
         
-        // ===== 1. 覆蓋 checkLogin 函數，禁用自動登入 =====
+        // ===== 1. 先定義 checkLogin，防止 main.js 執行時找不到 =====
         window.checkLogin = function() {
             console.log('⛔ checkLogin 已被覆蓋 - 不執行自動登入');
+            
             // 強制顯示登入頁面
             const authView = document.getElementById('auth-view');
             const dashboardView = document.getElementById('dashboard-view');
             const coachContainer = document.getElementById('ai-coach-container');
             
-            if (authView) authView.classList.remove('hidden');
-            if (dashboardView) dashboardView.classList.add('hidden');
-            if (coachContainer) coachContainer.classList.add('hidden');
-        };
-        
-        // ===== 2. 確保初始顯示登入頁面 =====
-        function forceLoginPage() {
-            const authView = document.getElementById('auth-view');
-            const dashboardView = document.getElementById('dashboard-view');
-            const coachContainer = document.getElementById('ai-coach-container');
-            
-            if (authView) authView.classList.remove('hidden');
-            if (dashboardView) dashboardView.classList.add('hidden');
-            if (coachContainer) coachContainer.classList.add('hidden');
+            if (authView) {
+                authView.classList.remove('hidden');
+                authView.style.display = 'block';
+            }
+            if (dashboardView) {
+                dashboardView.classList.add('hidden');
+                dashboardView.style.display = 'none';
+            }
+            if (coachContainer) {
+                coachContainer.classList.add('hidden');
+                coachContainer.style.display = 'none';
+            }
             
             console.log('✅ 強制顯示登入頁面');
-        }
+        };
         
-        // 立即執行
-        forceLoginPage();
+        // ===== 2. 立即執行一次，確保初始狀態 =====
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('📍 DOM 載入完成，執行 checkLogin');
+            window.checkLogin();
+        });
         
-        console.log('✅ 自動登入已禁用');
+        console.log('✅ 自動登入已禁用（已覆蓋 checkLogin）');
     })();
     </script>
+    
+    <script src="public/js/main.js"></script>
     
     <script src="public/js/bg-effects.js"></script>
     <script src="public/js/ai_chat.js"></script>
