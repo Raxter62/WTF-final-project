@@ -260,6 +260,10 @@ function saveName() {
 
 function generateAvatarGrid() {
     const grid = document.getElementById('avatar-grid');
+    if (!grid) {
+        console.warn('Avatar grid element not found; skipping grid generation.');
+        return;
+    }
     grid.innerHTML = '';
 
     // 使用 1.png 到 11.png
