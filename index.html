@@ -618,69 +618,95 @@
         <!-- ✅ cache bust：立刻繞過舊 SW 快取的 main.js -->
         <script src="public/js/main.js?v=20251228_1"></script>
         
-        <!-- 🔧 緊急修復腳本：確保表單綁定 -->
+        <!-- 🔧 緊急修復腳本 v2：修正 API 請求 -->
         <script>
         (function() {
-            console.log('🔧 執行緊急修復腳本...');
+            console.log('🔧 [緊急修復 v2] 開始執行...');
             
-            // 等待 DOM 完全載入
             function fixForms() {
-                console.log('🔧 開始修復表單綁定...');
+                console.log('🔧 檢查並修復表單綁定...');
                 
                 const loginForm = document.getElementById('login-form');
                 const registerForm = document.getElementById('register-form');
                 
-                if (loginForm && !loginForm.onsubmit) {
-                    console.log('⚠️ 登入表單未綁定，現在修復...');
+                // === 修復登入表單 ===
+                if (loginForm && !loginForm.__fixed__) {
+                    console.log('⚠️ 登入表單需要修復');
                     
                     loginForm.onsubmit = async function(e) {
                         e.preventDefault();
-                        console.log('🔐 [緊急修復] 處理登入...');
+                        console.log('🔐 [修復版] 處理登入請求...');
                         
                         const email = this.querySelector('input[name="email"]').value.trim();
                         const password = this.querySelector('input[name="password"]').value;
                         
                         if (!email || !password) {
                             alert('請輸入 Email 與密碼');
-                            return;
+                            return false;
                         }
                         
+                        console.log('📤 發送登入請求:', email);
+                        
                         try {
+                            // 修正：使用正確的 URL 格式
                             const res = await fetch('submit.php?action=login', {
                                 method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
+                                headers: { 
+                                    'Content-Type': 'application/json',
+                                    'Accept': 'application/json'
+                                },
                                 credentials: 'same-origin',
-                                body: JSON.stringify({ email, password })
+                                body: JSON.stringify({ 
+                                    action: 'login',  // 加入 action
+                                    email: email, 
+                                    password: password 
+                                })
                             });
                             
-                            const text = await res.text();
-                            const json = JSON.parse(text);
+                            console.log('📥 HTTP 狀態:', res.status);
                             
-                            console.log('📥 登入回應:', json);
+                            const text = await res.text();
+                            console.log('📥 原始回應:', text);
+                            
+                            let json;
+                            try {
+                                json = JSON.parse(text);
+                            } catch (parseError) {
+                                console.error('❌ JSON 解析失敗:', parseError);
+                                alert('伺服器回應格式錯誤');
+                                return false;
+                            }
+                            
+                            console.log('📥 解析後:', json);
                             
                             if (json.success) {
-                                console.log('✅ 登入成功');
-                                location.reload();
+                                console.log('✅ 登入成功！重新載入...');
+                                setTimeout(() => location.reload(), 500);
                             } else {
+                                console.error('❌ 登入失敗:', json.message);
                                 alert('登入失敗: ' + (json.message || '帳號或密碼錯誤'));
                             }
                         } catch (err) {
                             console.error('❌ 登入錯誤:', err);
                             alert('連線錯誤: ' + err.message);
                         }
+                        
+                        return false;
                     };
                     
+                    loginForm.__fixed__ = true;
                     console.log('✅ 登入表單已修復');
                 } else if (loginForm) {
-                    console.log('✅ 登入表單已經綁定');
+                    console.log('✅ 登入表單已經修復過');
                 }
                 
-                if (registerForm && !registerForm.onsubmit) {
-                    console.log('⚠️ 註冊表單未綁定，現在修復...');
+                // === 修復註冊表單 ===
+                if (registerForm && !registerForm.__fixed__) {
+                    console.log('⚠️ 註冊表單需要修復');
                     
                     registerForm.onsubmit = async function(e) {
                         e.preventDefault();
-                        console.log('📝 [緊急修復] 處理註冊...');
+                        console.log('📝 [修復版] 處理註冊請求...');
                         
                         const display_name = this.querySelector('input[name="display_name"]').value.trim();
                         const email = this.querySelector('input[name="email"]').value.trim();
@@ -688,52 +714,81 @@
                         
                         if (!display_name || !email || !password) {
                             alert('請輸入暱稱、Email 與密碼');
-                            return;
+                            return false;
                         }
+                        
+                        console.log('📤 發送註冊請求:', email);
                         
                         try {
                             const res = await fetch('submit.php?action=register', {
                                 method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
+                                headers: { 
+                                    'Content-Type': 'application/json',
+                                    'Accept': 'application/json'
+                                },
                                 credentials: 'same-origin',
-                                body: JSON.stringify({ display_name, email, password })
+                                body: JSON.stringify({ 
+                                    action: 'register',  // 加入 action
+                                    display_name: display_name,
+                                    email: email, 
+                                    password: password 
+                                })
                             });
                             
-                            const text = await res.text();
-                            const json = JSON.parse(text);
+                            console.log('📥 HTTP 狀態:', res.status);
                             
-                            console.log('📥 註冊回應:', json);
+                            const text = await res.text();
+                            console.log('📥 原始回應:', text);
+                            
+                            let json;
+                            try {
+                                json = JSON.parse(text);
+                            } catch (parseError) {
+                                console.error('❌ JSON 解析失敗:', parseError);
+                                alert('伺服器回應格式錯誤');
+                                return false;
+                            }
+                            
+                            console.log('📥 解析後:', json);
                             
                             if (json.success) {
-                                console.log('✅ 註冊成功');
-                                location.reload();
+                                console.log('✅ 註冊成功！重新載入...');
+                                setTimeout(() => location.reload(), 500);
                             } else {
+                                console.error('❌ 註冊失敗:', json.message);
                                 alert('註冊失敗: ' + (json.message || '未知錯誤'));
                             }
                         } catch (err) {
                             console.error('❌ 註冊錯誤:', err);
                             alert('連線錯誤: ' + err.message);
                         }
+                        
+                        return false;
                     };
                     
+                    registerForm.__fixed__ = true;
                     console.log('✅ 註冊表單已修復');
                 } else if (registerForm) {
-                    console.log('✅ 註冊表單已經綁定');
+                    console.log('✅ 註冊表單已經修復過');
                 }
             }
             
-            // 多次嘗試修復
+            // 多次嘗試修復，確保成功
             if (document.readyState === 'loading') {
                 document.addEventListener('DOMContentLoaded', function() {
                     setTimeout(fixForms, 100);
-                    setTimeout(fixForms, 500);
+                    setTimeout(fixForms, 300);
+                    setTimeout(fixForms, 600);
                     setTimeout(fixForms, 1000);
                 });
             } else {
                 setTimeout(fixForms, 100);
-                setTimeout(fixForms, 500);
+                setTimeout(fixForms, 300);
+                setTimeout(fixForms, 600);
                 setTimeout(fixForms, 1000);
             }
+            
+            console.log('✅ 緊急修復腳本已載入');
         })();
         </script>
 
