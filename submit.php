@@ -14,10 +14,14 @@ try {
     require_once __DIR__ . '/config.php';
     
     // Check and load coach.php (optional)
-    $coachAvailable = false;
     if (file_exists(__DIR__ . '/LLM/coach.php')) {
         require_once __DIR__ . '/LLM/coach.php';
         $coachAvailable = true;
+    }
+    
+    // Check and load mail.php (renamed from gamification.php)
+    if (file_exists(__DIR__ . '/mail.php')) {
+        require_once __DIR__ . '/mail.php';
     }
     
     session_start();
@@ -172,6 +176,9 @@ try {
             sendResponse(['success' => false, 'message' => 'Invalid workout data']);
         }
         
+        // Gamification: Get Pre-Update Ranks
+        $preRanks = function_exists('getCurrentRanks') ? getCurrentRanks($pdo) : [];
+        
         $stmt = $pdo->prepare(
             'INSERT INTO workouts (user_id, date, type, minutes, calories) VALUES (:uid, :date, :type, :min, :cal)'
         );
@@ -189,6 +196,17 @@ try {
              ON CONFLICT (user_id) DO UPDATE SET total_calories = user_totals.total_calories + :cal'
         );
         $stmt->execute([':uid' => $_SESSION['user_id'], ':cal' => $calories]);
+        
+        // Gamification Hooks
+        if (function_exists('checkAchievements')) {
+            checkAchievements($pdo, $_SESSION['user_id']);
+        }
+        if (function_exists('checkLeaderboardChanges') && !empty($preRanks)) {
+            checkLeaderboardChanges($pdo, $preRanks);
+        }
+        if (function_exists('logLeaderboardSnapshot')) {
+            logLeaderboardSnapshot($pdo);
+        }
         
         sendResponse(['success' => true, 'message' => 'Workout added']);
     }

@@ -161,6 +161,16 @@ try {
 
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_workouts_user_date ON workouts(user_id, date);");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_leaderboard_date ON leaderboard_snapshots(date);");
+    
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS achievements (
+            id BIGSERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            type VARCHAR(50) NOT NULL,
+            unlocked_at TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE(user_id, type)
+        );
+    ");
 } catch (PDOException $e) {
     fc_json_fatal('DB schema init failed', $e->getMessage());
 }
