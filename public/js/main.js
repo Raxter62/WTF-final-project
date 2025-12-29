@@ -562,26 +562,26 @@ function showAchievementNotification(title, imgName) {
     Object.assign(notifyBox.style, {
         position: 'fixed',
         bottom: '20px',
-        right: '-320px', // Start off-screen
+        left: '-320px', // Start off-screen
         width: '300px',
         background: 'white',
         boxShadow: '0 5px 20px rgba(0,0,0,0.2)',
         borderRadius: '12px',
         padding: '1.5rem',
         zIndex: '10000',
-        transition: 'right 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)' // Spring effect
+        transition: 'left 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)' // Spring effect
     });
 
     document.body.appendChild(notifyBox);
 
     // Slide In
     setTimeout(() => {
-        notifyBox.style.right = '20px';
+        notifyBox.style.left = '20px';
     }, 100);
 
     // Slide Out after 5 seconds
     setTimeout(() => {
-        notifyBox.style.right = '-320px';
+        notifyBox.style.left = '-320px';
         setTimeout(() => {
             notifyBox.remove();
         }, 600); // Wait for transition
