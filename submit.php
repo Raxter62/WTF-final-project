@@ -459,7 +459,8 @@ try {
         }
         
         try {
-            $response = handleCoachRequest($_SESSION['user_id'], $message, $pdo);
+            // Fix: call existing function askCoachFromDb without $pdo
+            $response = askCoachFromDb($_SESSION['user_id'], $message);
             sendResponse(['success' => true, 'response' => $response]);
         } catch (Exception $e) {
             sendResponse(['success' => false, 'message' => 'AI Coach error: ' . $e->getMessage()]);
@@ -474,6 +475,7 @@ try {
     http_response_code(500);
     echo json_encode([
         'success' => false,
+        'message' => 'Database error: ' . $e->getMessage(), // Added message key
         'error' => 'Database error: ' . $e->getMessage(),
         'file' => $e->getFile(),
         'line' => $e->getLine(),
@@ -486,6 +488,7 @@ try {
     http_response_code(500);
     echo json_encode([
         'success' => false,
+        'message' => $e->getMessage(), // Added message key
         'error' => $e->getMessage(),
         'file' => $e->getFile(),
         'line' => $e->getLine(),
@@ -498,6 +501,7 @@ try {
     http_response_code(500);
     echo json_encode([
         'success' => false,
+        'message' => 'Fatal error: ' . $e->getMessage(), // Added message key
         'error' => 'Fatal error: ' . $e->getMessage(),
         'file' => $e->getFile(),
         'line' => $e->getLine(),
