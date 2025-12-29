@@ -391,6 +391,18 @@ body {
     font-size: 1.1rem;
 }
 
+.line-primary {
+    background: #00B900;
+    color: white;
+    border: none;
+    padding: 15px 30px;
+    border-radius: 50px;
+    cursor: pointer;
+    font-weight: bold;
+    width: 100%;
+    font-size: 1.1rem;
+}
+
 /* --- Global Elements (Switch) --- */
 .global-time-switch {
     display: flex;

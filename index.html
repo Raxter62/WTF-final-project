@@ -492,8 +492,8 @@
                 </defs>
                 <g class="parallax">
                     <use xlink:href="#gentle-wave3" x="48" y="0" style="fill:rgba(255,255,255,0.7)" />
-                    <use xlink:href="#gentle-wave3" x="48" y="3" style="fill:rgba(255,255,255,0.5)" />
-                    <use xlink:href="#gentle-wave3" x="48" y="5" style="fill:rgba(255,255,255,0.3)" />
+                    <use xlink:href="#gentle-wave3" x="48" y="3" style="fill:rgba(254, 184, 93, 0.5)" />
+                    <use xlink:href="#gentle-wave3" x="48" y="5" style="fill:rgba(247, 201, 95, 0.3)" />
                     <use xlink:href="#gentle-wave3" x="48" y="7" style="fill:rgba(255,255,255,0.95)" />
                 </g>
             </svg>
@@ -515,17 +515,17 @@
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: start;">
                             <!-- 左側：按鈕和說明 -->
                             <div>
-                                <button onclick="generateBindCode()" class="btn-primary"
+                                <button onclick="generateBindCode()" class="line-primary"
                                     style="width: 100%; margin-bottom: 1rem;">
                                     產生綁定碼
                                 </button>
                                 <div
-                                    style="background: rgba(102, 126, 234, 0.1); padding: 1.5rem; border-radius: 12px; border-left: 4px solid #667eea;">
+                                    style="background: rgba(197, 248, 176, 0.1); padding: 1.5rem; border-radius: 12px; border-left: 4px solid #00B900;">
                                     <p style="color: #333; font-size: 0.95rem; margin: 0; line-height: 1.6;">
-                                        <strong style="color: #667eea;">📌 使用方式：</strong><br>
+                                        <strong style="color: #00B900;">📌 使用方式：</strong><br>
                                         1️⃣ 點擊「產生綁定碼」按鈕<br>
                                         2️⃣ 掃描 QR Code 或加入 LINE ID: <strong
-                                            style="color: #667eea;">@063jezzz</strong><br>
+                                            style="color: #00B900;">@063jezzz</strong><br>
                                         3️⃣ 在 LINE Bot 中輸入綁定碼
                                     </p>
                                 </div>
@@ -538,11 +538,11 @@
                                     <div id="qrcode" style="display: inline-block;"></div>
                                 </div>
                                 <div
-                                    style="background: #667eea; padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem; border: 2px solid rgba(255,255,255,0.3);">
+                                    style="background: #00B900; padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem; border: 2px solid rgba(255,255,255,0.3);">
                                     <p style="color: #fff; margin: 0 0 0.5rem 0; font-size: 1rem; font-weight: bold;">
                                         綁定碼（10分鐘內有效）</p>
                                     <p id="bind-code-text"
-                                        style="color: #feca57; font-size: 2.5rem; font-weight: bold; margin: 0; letter-spacing: 5px; text-shadow: 0 2px 4px rgba(0,0,0,0.3);">
+                                        style="color: #fff; font-size: 2.5rem; font-weight: bold; margin: 0; letter-spacing: 5px; text-shadow: 0 2px 4px rgba(0,0,0,0.3);">
                                         ------</p>
                                 </div>
                             </div>
