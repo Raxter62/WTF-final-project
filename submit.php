@@ -4,69 +4,100 @@ session_start();
 require_once 'config.php';
 require_once __DIR__ . '/LLM/coach.php';
 
-header('Content-Type: application/json; charset=utf-8');
+ob_start();
 
-// 取得輸入資料的輔助函式
-function getJsonInput() {
-    return json_decode(file_get_contents('php://input'), true) ?? [];
-}
-
-// 回傳回應的輔助函式
-function sendResponse($data) {
-    echo json_encode($data, JSON_UNESCAPED_UNICODE);
-    exit;
-}
-
-$action = $_GET['action'] ?? $_POST['action'] ?? '';
-$input = getJsonInput();
-
-// Ensure DB connection
-if (!$pdo) {
-    sendResponse(['success' => false, 'message' => 'DB 連線失敗']);
-}
-
-// --- 驗證相關動作 ---
-
-if ($action === 'register') {
-    $email = $input['email'] ?? '';
-    $pass = $input['password'] ?? '';
-    $name = $input['display_name'] ?? 'User';
-
-    if (!$email || !$pass) {
-        sendResponse(['success' => false, 'message' => '請輸入 Email 和密碼']);
+try {
+    // Check and load config.php
+    if (!file_exists(__DIR__ . '/config.php')) {
+        throw new Exception('config.php not found in ' . __DIR__);
     }
-
-    // 檢查 email 是否已存在
-    $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ?");
-    $stmt->execute([$email]);
-    if ($stmt->fetch()) {
-        sendResponse(['success' => false, 'message' => '此 Email 已被註冊']);
+    require_once __DIR__ . '/config.php';
+    
+    // Check and load coach.php (optional)
+    $coachAvailable = false;
+    if (file_exists(__DIR__ . '/LLM/coach.php')) {
+        require_once __DIR__ . '/LLM/coach.php';
+        $coachAvailable = true;
     }
-
-    // 建立使用者
-    $hash = password_hash($pass, PASSWORD_DEFAULT);
-    $stmt = $pdo->prepare("INSERT INTO users (email, password_hash, display_name) VALUES (?, ?, ?)");
-    if ($stmt->execute([$email, $hash, $name])) {
-        // 自動登入
-        $_SESSION['user_id'] = $pdo->lastInsertId();
-        sendResponse(['success' => true]);
-    } else {
-        sendResponse(['success' => false, 'message' => '註冊失敗']);
+    
+    session_start();
+    header('Content-Type: application/json; charset=utf-8');
+    
+    // Check database connection
+    if (!isset($pdo) || !$pdo) {
+        throw new Exception('Database connection failed - $pdo not available');
     }
-
-} elseif ($action === 'login') {
-    $email = $input['email'] ?? '';
-    $pass = $input['password'] ?? '';
-
-    $stmt = $pdo->prepare("SELECT id, password_hash, display_name FROM users WHERE email = ?");
-    $stmt->execute([$email]);
-    $user = $stmt->fetch();
-
-    if ($user && password_verify($pass, $user['password_hash'])) {
+    
+    // Test database
+    try {
+        $pdo->query('SELECT 1');
+        // Set Timezone for current session
+        $pdo->exec("SET TIME ZONE 'Asia/Taipei'");
+    } catch (PDOException $e) {
+        throw new Exception('Database query test failed: ' . $e->getMessage());
+    }
+    
+    // Helper functions
+    function getJsonInput(): array {
+        $raw = file_get_contents('php://input');
+        if ($raw === false || $raw === '') return [];
+        $data = json_decode($raw, true);
+        return is_array($data) ? $data : [];
+    }
+    
+    function sendResponse(array $data): void {
+        ob_end_clean();
+        echo json_encode($data, JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    
+    $input = getJsonInput();
+    $action = $input['action'] ?? ($_GET['action'] ?? '');
+    
+    // === Authentication Actions ===
+    if ($action === 'register') {
+        $email = trim($input['email'] ?? '');
+        $pass = $input['password'] ?? '';
+        $name = trim($input['display_name'] ?? 'User');
+        
+        $stmt = $pdo->prepare('SELECT id FROM users WHERE email = :email LIMIT 1');
+        $stmt->execute([':email' => $email]);
+        if ($stmt->fetch()) {
+            sendResponse(['success' => false, 'message' => '這個email已註冊過了']);
+        }
+        
+        $hash = password_hash($pass, PASSWORD_DEFAULT);
+        $stmt = $pdo->prepare(
+            'INSERT INTO users (email, password_hash, display_name) VALUES (:email, :hash, :name) RETURNING id'
+        );
+        
+        if ($stmt->execute([':email' => $email, ':hash' => $hash, ':name' => $name])) {
+            $newUser = $stmt->fetch(PDO::FETCH_ASSOC);
+            $_SESSION['user_id'] = $newUser['id'];
+            sendResponse(['success' => true, 'message' => 'Registration successful']);
+        }
+        
+        sendResponse(['success' => false, 'message' => 'Registration failed']);
+    }
+    
+    if ($action === 'login') {
+        $email = trim($input['email'] ?? '');
+        $pass = $input['password'] ?? '';
+        
+        if ($email === '' || $pass === '') {
+            sendResponse(['success' => false, 'message' => 'Please enter email and password']);
+        }
+        
+        $stmt = $pdo->prepare('SELECT id, password_hash, display_name FROM users WHERE email = :email LIMIT 1');
+        $stmt->execute([':email' => $email]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$user || !password_verify($pass, $user['password_hash'])) {
+            sendResponse(['success' => false, 'message' => 'Invalid email or password']);
+        }
+        
         $_SESSION['user_id'] = $user['id'];
-        sendResponse(['success' => true]);
-    } else {
-        sendResponse(['success' => false, 'message' => '帳號或密碼錯誤']);
+        sendResponse(['success' => true, 'message' => 'Login successful']);
     }
 
 } elseif ($action === 'logout') {
@@ -257,18 +288,205 @@ if ($action === 'get_user_info') {
 } elseif ($action === 'ai_coach') {
     $msg = $input['message'] ?? '';
     
-    // 取得歷史紀錄
-    $stmt = $pdo->prepare("SELECT date, type, minutes, calories FROM workouts WHERE user_id = ? ORDER BY date DESC LIMIT 10");
-    $stmt->execute([$userId]);
-    $rows = $stmt->fetchAll();
-
-    $historyText = "最近運動紀錄：\n";
-    foreach ($rows as $r) {
-        $historyText .= "{$r['date']} - {$r['type']} ({$r['minutes']}分鐘, {$r['calories']}kcal)\n";
+    if ($action === 'get_user_info') {
+        if (!isset($_SESSION['user_id'])) {
+            sendResponse(['success' => false, 'message' => 'Not logged in']);
+        }
+        
+        $stmt = $pdo->prepare('SELECT id, email, display_name, height, weight, avatar_id FROM users WHERE id = :id');
+        $stmt->execute([':id' => $_SESSION['user_id']]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$user) {
+            sendResponse(['success' => false, 'message' => 'User not found']);
+        }
+        
+        sendResponse(['success' => true, 'data' => $user]);
     }
+    
+    // === Profile Actions ===
+    if ($action === 'update_profile') {
+        if (!isset($_SESSION['user_id'])) {
+            sendResponse(['success' => false, 'message' => 'Not logged in']);
+        }
+        
+        $name = trim($input['display_name'] ?? '');
+        $height = intval($input['height'] ?? 0);
+        $weight = intval($input['weight'] ?? 0);
+        
+        $stmt = $pdo->prepare(
+            'UPDATE users SET display_name = :name, height = :height, weight = :weight WHERE id = :id'
+        );
+        $stmt->execute([
+            ':name' => $name,
+            ':height' => $height,
+            ':weight' => $weight,
+            ':id' => $_SESSION['user_id']
+        ]);
+        
+        sendResponse(['success' => true, 'message' => 'Profile updated']);
+    }
+    
+    if ($action === 'update_avatar') {
+        if (!isset($_SESSION['user_id'])) {
+            sendResponse(['success' => false, 'message' => 'Not logged in']);
+        }
+        
+        $avatarId = intval($input['avatar_id'] ?? 1);
+        
+        $stmt = $pdo->prepare('UPDATE users SET avatar_id = :aid WHERE id = :id');
+        $stmt->execute([':aid' => $avatarId, ':id' => $_SESSION['user_id']]);
+        
+        sendResponse(['success' => true, 'message' => 'Avatar updated']);
+    }
+    
+    // === Workout Actions ===
+    if ($action === 'add_workout') {
+        if (!isset($_SESSION['user_id'])) {
+            sendResponse(['success' => false, 'message' => 'Not logged in']);
+        }
+        
+        $date = $input['date'] ?? '';
+        $type = $input['type'] ?? '';
+        $minutes = intval($input['minutes'] ?? 0);
+        $calories = intval($input['calories'] ?? 0);
+        
+        if ($date === '' || $type === '' || $minutes <= 0) {
+            sendResponse(['success' => false, 'message' => 'Invalid workout data']);
+        }
+        
+        $stmt = $pdo->prepare(
+            'INSERT INTO workouts (user_id, date, type, minutes, calories) VALUES (:uid, :date, :type, :min, :cal)'
+        );
+        $stmt->execute([
+            ':uid' => $_SESSION['user_id'],
+            ':date' => $date,
+            ':type' => $type,
+            ':min' => $minutes,
+            ':cal' => $calories
+        ]);
+        
+        // Update User Totals (Postgres UPSERT)
+        $stmt = $pdo->prepare(
+            'INSERT INTO user_totals (user_id, total_calories) VALUES (:uid, :cal) 
+             ON CONFLICT (user_id) DO UPDATE SET total_calories = user_totals.total_calories + :cal'
+        );
+        $stmt->execute([':uid' => $_SESSION['user_id'], ':cal' => $calories]);
+        
+        sendResponse(['success' => true, 'message' => 'Workout added']);
+    }
+    
+        if ($action === 'get_stats') {
+        if (!isset($_SESSION['user_id'])) {
+            sendResponse(['success' => false, 'message' => 'Not logged in']);
+        }
+        
+        $range = $_GET['range'] ?? '1d';
+        
+        // --- 1. 定義時間範圍與分組邏輯 ---
+        $startDate = '';
+        $groupBy = '';
+        $dateFormat = ''; // 用於 PHP 後處理或 SQL 顯示
+        
+        if ($range === '1d') {
+            // 最近 1 天 (00:00 - 24:00)，每 3 小時一組
+            // SQL: floor(extract(hour from date) / 3) * 3
+            $startDate = date('Y-m-d 00:00:00'); // 今天 0點
+            // Postgres logic for checking today
+        } elseif ($range === '1wk') {
+            // 最近 1 週 (MON-SUN) or 7 days
+            // User said "Recent MON~SUN". Standard ISO week logic.
+            // Let's use date_trunc('week', current_date)
+        } elseif ($range === '1m') {
+            // 最近 1 月 (01-30)，每 6 天一組
+            // User said "Recent (current month) 01~30".
+            // Let's use date_trunc('month', current_date)
+        } elseif ($range === '3m') {
+            // 最近 3 個月，每 1 個月一組
+        }
+        
+        // Postgres Queries
+        $timeData = [];
+        $calData = [];
+        $typeData = [];
+        
+        try {
+            if ($range === '1d') {
+                // 1天: 只要今天的資料，每3小時一格 (0, 3, 6, ..., 21)
+                $stmt = $pdo->prepare(
+                    "SELECT floor(extract(hour from date) / 3) * 3 as label_start, 
+                            SUM(minutes) as total_min, 
+                            SUM(calories) as total_cal
+                     FROM workouts 
+                     WHERE user_id = :uid AND date >= CURRENT_DATE 
+                     GROUP BY 1 ORDER BY 1 ASC"
+                );
+                $stmt->execute([':uid' => $_SESSION['user_id']]);
+                $raw = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                
+                // 補齊 0-21 的空缺
+                // 補齊 0-21 的空缺，產生 0:00~3:00, 3:00~6:00 等標籤
+                for ($h = 0; $h < 24; $h += 3) {
+                    $found = false;
+                    $label = sprintf("%d:00~%d:00", $h, $h + 3);
+                    
+                    foreach ($raw as $r) {
+                        if (intval($r['label_start']) === $h) {
+                            $timeData[] = ['label' => $label, 'total' => $r['total_min']];
+                            $calData[] = ['label' => $label, 'total' => $r['total_cal']];
+                            $found = true;
+                            break;
+                        }
+                    }
+                    if (!$found) {
+                        $timeData[] = ['label' => $label, 'total' => 0];
+                        $calData[] = ['label' => $label, 'total' => 0];
+                    }
+                }
+                
+                // Type Chart (Today)
+                $stmt = $pdo->prepare(
+                    "SELECT type, SUM(minutes) as total FROM workouts 
+                     WHERE user_id = :uid AND date >= CURRENT_DATE 
+                     GROUP BY type ORDER BY total DESC"
+                );
+                $stmt->execute([':uid' => $_SESSION['user_id']]);
+                $typeData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                
+            } elseif ($range === '1wk') {
+                // 1週: 本週一開始
+                $stmt = $pdo->prepare(
+                    "SELECT to_char(date, 'Dy') as day_label, 
+                            extract(isodow from date) as day_num,
+                            SUM(minutes) as total_min, 
+                            SUM(calories) as total_cal
+                     FROM workouts 
+                     WHERE user_id = :uid AND date >= date_trunc('week', CURRENT_DATE)
+                     GROUP BY 1, 2 ORDER BY 2 ASC"
+                );
+                $stmt->execute([':uid' => $_SESSION['user_id']]);
+                $raw = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                
+                // Map 1-7 to data, simple fill or just return raw if chart.js handles it. 
+                // Let's standardise to Mon, Tue...
+                $weekDays = [1=>'Mon', 2=>'Tue', 3=>'Wed', 4=>'Thu', 5=>'Fri', 6=>'Sat', 7=>'Sun'];
+                foreach ($weekDays as $num => $txt) {
+                    $found = null;
+                    foreach ($raw as $r) {
+                        if (intval($r['day_num']) === $num) $found = $r;
+                    }
+                    $timeData[] = ['label' => $txt, 'total' => $found ? $found['total_min'] : 0];
+                    $calData[] = ['label' => $txt, 'total' => $found ? $found['total_cal'] : 0];
+                }
 
-    $reply = askCoach($historyText, $msg);
-    sendResponse(['success' => true, 'reply' => $reply]);
+                // Type Chart (This Week)
+                $stmt = $pdo->prepare(
+                    "SELECT type, SUM(minutes) as total FROM workouts 
+                     WHERE user_id = :uid AND date >= date_trunc('week', CURRENT_DATE)
+                     GROUP BY type ORDER BY total DESC"
+                );
+                $stmt->execute([':uid' => $_SESSION['user_id']]);
+                $typeData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 } elseif ($action === 'update_avatar') {
     // 更新用戶頭像

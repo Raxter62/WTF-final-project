@@ -42,8 +42,9 @@ document.addEventListener('DOMContentLoaded', () => {
 // ========== 認證相關 ==========
 
 async function checkLogin() {
+    console.log('🔍 檢查登入狀態...');
     try {
-        const res = await fetch(`${API_URL}?action=get_user_info`);
+        const res = await fetch(`${API_URL}?action=get_user_info`, { credentials: 'same-origin' });
         const json = await res.json();
         
         if (json.success && json.data) {

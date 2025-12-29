@@ -32,7 +32,7 @@ async function sendChatMessage() {
         if (loader) loader.remove();
 
         if (res.success) {
-            appendMsg(res.reply, 'ai');
+            appendMsg(res.response, 'ai');
         } else {
             appendMsg('錯誤：' + res.message, 'ai');
         }
@@ -42,6 +42,22 @@ async function sendChatMessage() {
         appendMsg('連線發生錯誤', 'ai');
     }
 }
+
+// 切換聊天視窗顯示
+// 切換聊天視窗顯示
+window.toggleChat = function () {
+    const chatWindow = document.getElementById('chat-window');
+
+    if (chatWindow.style.display === 'none' || chatWindow.style.display === '') {
+        chatWindow.style.display = 'flex';
+        chatWindow.style.animation = 'fadeInUp 0.3s ease';
+    } else {
+        chatWindow.style.animation = 'fadeOut 0.3s ease';
+        setTimeout(() => {
+            chatWindow.style.display = 'none';
+        }, 300);
+    }
+};
 
 function appendMsg(text, type, id = null) {
     const container = document.getElementById('chat-messages');

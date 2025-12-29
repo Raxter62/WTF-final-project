@@ -1,8 +1,8 @@
 FROM php:8.2-apache
 
-# 安裝 PDO MySQL / PostgreSQL
+# 安裝 PDO PostgreSQL（Neon/Railway 使用）
 RUN apt-get update && apt-get install -y libpq-dev \
-    && docker-php-ext-install pdo pdo_mysql pdo_pgsql \
+    && docker-php-ext-install pdo pdo_pgsql \
     && rm -rf /var/lib/apt/lists/*
 
 # 🔧 建置階段：清掉所有 MPM，只留下 mpm_prefork + rewrite
