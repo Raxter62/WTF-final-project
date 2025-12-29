@@ -65,7 +65,7 @@ try {
         $stmt = $pdo->prepare('SELECT id FROM users WHERE email = :email LIMIT 1');
         $stmt->execute([':email' => $email]);
         if ($stmt->fetch()) {
-            sendResponse(['success' => false, 'message' => 'This email is already registered']);
+            sendResponse(['success' => false, 'message' => '這個email已註冊過了']);
         }
         
         $hash = password_hash($pass, PASSWORD_DEFAULT);
