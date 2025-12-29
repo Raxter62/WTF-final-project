@@ -579,13 +579,13 @@ function showAchievementNotification(title, imgName) {
         notifyBox.style.left = '20px';
     }, 100);
 
-    // Slide Out after 5 seconds
+    // Slide Out after 10 seconds
     setTimeout(() => {
         notifyBox.style.left = '-320px';
         setTimeout(() => {
             notifyBox.remove();
         }, 600); // Wait for transition
-    }, 5000);
+    }, 10000);
 }
 
 function getDemoStats(range) {
