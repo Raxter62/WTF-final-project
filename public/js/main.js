@@ -449,6 +449,12 @@ function setGlobalRange(range) {
 window.setGlobalRange = setGlobalRange;
 
 async function fetchStats(range) {
+    const charts = document.querySelectorAll('.chart-box canvas');
+    charts.forEach(c => {
+        c.style.transition = 'opacity 0.3s';
+        c.style.opacity = '0.5';
+    });
+
     try {
         const json = isDemoMode
             ? getDemoStats(range)
@@ -466,6 +472,8 @@ async function fetchStats(range) {
 
     } catch (e) {
         console.error('Stats error:', e);
+    } finally {
+        charts.forEach(c => c.style.opacity = '1');
     }
 }
 
@@ -489,28 +497,36 @@ function renderChart(data, range) {
     const labels = data.map(d => d.label);
     const values = data.map(d => d.total);
 
-    if (dailyChart) dailyChart.destroy();
-
-    dailyChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels,
-            datasets: [{
-                label: '運動時間 (min)',
-                data: values,
-                backgroundColor: 'rgba(255,71,87,0.6)',
-                borderRadius: 4
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-                y: { beginAtZero: true }
+    if (dailyChart) {
+        dailyChart.data.labels = labels;
+        dailyChart.data.datasets[0].data = values;
+        dailyChart.update();
+    } else {
+        dailyChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [{
+                    label: '運動時間 (min)',
+                    data: values,
+                    backgroundColor: 'rgba(255,71,87,0.6)',
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: true }
+                },
+                animation: {
+                    duration: 1000,
+                    easing: 'easeOutQuart'
+                }
             }
-        }
-    });
+        });
+    }
 }
 
 function renderTypeChart(data) {
@@ -520,22 +536,31 @@ function renderTypeChart(data) {
     const labels = data.map(d => d.type);
     const values = data.map(d => d.total);
 
-    if (typeChart) typeChart.destroy();
-
-    typeChart = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels,
-            datasets: [{
-                data: values,
-                backgroundColor: ['#FF4757', '#5352ED', '#F79F1F', '#00D2D3', '#EE5A6F', '#2ED573']
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false
-        }
-    });
+    if (typeChart) {
+        typeChart.data.labels = labels;
+        typeChart.data.datasets[0].data = values;
+        typeChart.update();
+    } else {
+        typeChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels,
+                datasets: [{
+                    data: values,
+                    backgroundColor: ['#FF4757', '#5352ED', '#F79F1F', '#00D2D3', '#EE5A6F', '#2ED573']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: {
+                    animateScale: true,
+                    animateRotate: true,
+                    duration: 1000
+                }
+            }
+        });
+    }
 }
 
 function renderCalorieChart(data, range) {
@@ -545,30 +570,38 @@ function renderCalorieChart(data, range) {
     const labels = data.map(d => d.label);
     const values = data.map(d => d.total);
 
-    if (calChart) calChart.destroy();
-
-    calChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels,
-            datasets: [{
-                label: '熱量消耗 (kcal)',
-                data: values,
-                borderColor: '#F79F1F',
-                backgroundColor: 'rgba(247, 159, 31, 0.1)',
-                fill: true,
-                tension: 0.4
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-                y: { beginAtZero: true }
+    if (calChart) {
+        calChart.data.labels = labels;
+        calChart.data.datasets[0].data = values;
+        calChart.update();
+    } else {
+        calChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    label: '熱量消耗 (kcal)',
+                    data: values,
+                    borderColor: '#F79F1F',
+                    backgroundColor: 'rgba(247, 159, 31, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: true }
+                },
+                animation: {
+                    duration: 1000,
+                    easing: 'easeOutQuart'
+                }
             }
-        }
-    });
+        });
+    }
 }
 
 async function loadLeaderboard() {
