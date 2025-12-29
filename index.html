@@ -314,6 +314,7 @@
                     <a href="#section-hero" class="active">紀錄</a>
                     <a href="#section-charts">分析</a>
                     <a href="#section-leaderboard">排行榜</a>
+                    <a href="#line-bind-section">綁定</a>
                     <a href="#" onclick="logout()">登出</a>
                 </div>
             </div>
@@ -463,7 +464,7 @@
         <section id="section-leaderboard" class="container">
             <h2 style="text-align: center; margin-bottom: 2rem; font-size: 2.5rem;">排行榜</h2>
             <div class="leaderboard-card">
-                <table class="leaderboard-table">
+                <table class="leaderboard-table" id="leaderboard-table">
                     <thead>
                         <tr>
                             <th>排名</th>
@@ -477,9 +478,31 @@
                 </table>
             </div>
 
-            <!-- LINE 綁定區塊 -->
-            <div
-                style="margin-top: 3rem; padding: 2rem; background: rgba(255,255,255,0.95); border-radius: 20px; backdrop-filter: blur(10px); border: 1px solid rgba(0,0,0,0.1); box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 1200px; margin-left: auto; margin-right: auto;">
+        </section>
+
+        <!-- Container for Wave + LINE Section to ensure seamless background -->
+        <div
+            style="width: 100%; overflow: hidden; line-height: 0; margin-bottom: -1px; margin-top: -100px; position: relative; z-index: 20; pointer-events: none;">
+            <svg class="waves" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+                viewBox="0 24 150 28" preserveAspectRatio="none" shape-rendering="auto"
+                style="width: 100%; height: 100px;">
+                <defs>
+                    <path id="gentle-wave3"
+                        d="M-160 44c30 0 58-18 88-18s 58 18 88 18 58-18 88-18 58 18 88 18 v44h-352z" />
+                </defs>
+                <g class="parallax">
+                    <use xlink:href="#gentle-wave3" x="48" y="0" style="fill:rgba(255,255,255,0.7)" />
+                    <use xlink:href="#gentle-wave3" x="48" y="3" style="fill:rgba(255,255,255,0.5)" />
+                    <use xlink:href="#gentle-wave3" x="48" y="5" style="fill:rgba(255,255,255,0.3)" />
+                    <use xlink:href="#gentle-wave3" x="48" y="7" style="fill:rgba(255,255,255,0.95)" />
+                </g>
+            </svg>
+        </div>
+
+        <!-- LINE 綁定區塊 Wrapper (Full Width Background) -->
+        <div style="background: rgba(255,255,255,0.95); padding-bottom: 3rem; margin-top: -1px;">
+            <div id="line-bind-section"
+                style="padding: 2rem; max-width: 1200px; margin-left: auto; margin-right: auto; position: relative; z-index: 10;">
                 <h3
                     style="margin: 0 0 1.5rem 0; color: #333; font-size: 1.5rem; display: flex; align-items: center; gap: 10px; font-weight: bold; justify-content: center;">
                     <span style="font-size: 2rem;">📱</span> LINE 綁定
@@ -538,92 +561,92 @@
                     </div>
                 </div>
             </div>
-        </section>
+            </section>
 
-    </div>
-
-    <!-- Coach 半身像 -->
-    <div id="ai-coach-container" class="hidden">
-        <div class="coach-img-wrapper" onclick="toggleChat()"
-            onmouseover="document.querySelector('.coach-full-img').src='public/image/tinin2.png'; document.getElementById('coach-bubble').style.opacity='1';"
-            onmouseout="document.querySelector('.coach-full-img').src='public/image/tinin.png'; document.getElementById('coach-bubble').style.opacity='0';">
-            <div class="coach-bubble" id="coach-bubble">今天想練什麼呢？</div>
-            <img src="public/image/tinin.png" class="coach-full-img" alt="AI Coach">
         </div>
-    </div>
 
-    <!-- Chat Window (Absolute) -->
-    <div id="chat-window">
-        <div class="chat-header">
-            <strong>AI 教練</strong>
+        <!-- Coach 半身像 -->
+        <div id="ai-coach-container" class="hidden">
+            <div class="coach-img-wrapper" onclick="toggleChat()"
+                onmouseover="document.querySelector('.coach-full-img').src='public/image/tinin2.png'; document.getElementById('coach-bubble').style.opacity='1';"
+                onmouseout="document.querySelector('.coach-full-img').src='public/image/tinin.png'; document.getElementById('coach-bubble').style.opacity='0';">
+                <div class="coach-bubble" id="coach-bubble">今天想練什麼呢？</div>
+                <img src="public/image/tinin.png" class="coach-full-img" alt="AI Coach">
+            </div>
         </div>
-        <div id="chat-messages">
-            <div class="chat-msg ai">嗨！我是你的專屬教練。</div>
+
+        <!-- Chat Window (Absolute) -->
+        <div id="chat-window">
+            <div class="chat-header">
+                <strong>AI 教練</strong>
+            </div>
+            <div id="chat-messages">
+                <div class="chat-msg ai">嗨！我是你的專屬教練。</div>
+            </div>
+            <div class="chat-input-area">
+                <input type="text" id="chat-input" class="form-control" placeholder="問我...">
+                <button onclick="sendChatMessage()">➤</button>
+            </div>
         </div>
-        <div class="chat-input-area">
-            <input type="text" id="chat-input" class="form-control" placeholder="問我...">
-            <button onclick="sendChatMessage()">➤</button>
-        </div>
-    </div>
 
 
 
 
-    <!-- Scripts -->
+        <!-- Scripts -->
 
-    <!-- 🛡️ 禁用自動登入（必須在 main.js 之前）-->
-    <script>
-        (function () {
-            console.log('🛡️ 禁用自動登入系統啟動');
+        <!-- 🛡️ 禁用自動登入（必須在 main.js 之前）-->
+        <script>
+            (function () {
+                console.log('🛡️ 禁用自動登入系統啟動');
 
-            // ===== 1. 先定義 checkLogin，防止 main.js 執行時找不到 =====
-            window.checkLogin = function () {
-                console.log('⛔ checkLogin 已被覆蓋 - 不執行自動登入');
+                // ===== 1. 先定義 checkLogin，防止 main.js 執行時找不到 =====
+                window.checkLogin = function () {
+                    console.log('⛔ checkLogin 已被覆蓋 - 不執行自動登入');
 
-                // 強制顯示登入頁面
-                const authView = document.getElementById('auth-view');
-                const dashboardView = document.getElementById('dashboard-view');
-                const coachContainer = document.getElementById('ai-coach-container');
+                    // 強制顯示登入頁面
+                    const authView = document.getElementById('auth-view');
+                    const dashboardView = document.getElementById('dashboard-view');
+                    const coachContainer = document.getElementById('ai-coach-container');
 
-                if (authView) {
-                    authView.classList.remove('hidden');
-                    authView.style.display = 'block';
-                }
-                if (dashboardView) {
-                    dashboardView.classList.add('hidden');
-                    dashboardView.style.display = 'none';
-                }
-                if (coachContainer) {
-                    coachContainer.classList.add('hidden');
-                    coachContainer.style.display = 'none';
-                }
+                    if (authView) {
+                        authView.classList.remove('hidden');
+                        authView.style.display = 'block';
+                    }
+                    if (dashboardView) {
+                        dashboardView.classList.add('hidden');
+                        dashboardView.style.display = 'none';
+                    }
+                    if (coachContainer) {
+                        coachContainer.classList.add('hidden');
+                        coachContainer.style.display = 'none';
+                    }
 
-                console.log('✅ 強制顯示登入頁面');
-            };
+                    console.log('✅ 強制顯示登入頁面');
+                };
 
-            // ===== 2. 立即執行一次，確保初始狀態 =====
-            document.addEventListener('DOMContentLoaded', function () {
-                console.log('📍 DOM 載入完成，執行 checkLogin');
-                window.checkLogin();
-            });
+                // ===== 2. 立即執行一次，確保初始狀態 =====
+                document.addEventListener('DOMContentLoaded', function () {
+                    console.log('📍 DOM 載入完成，執行 checkLogin');
+                    window.checkLogin();
+                });
 
-            console.log('✅ 自動登入已禁用（已覆蓋 checkLogin）');
-        })();
-    </script>
+                console.log('✅ 自動登入已禁用（已覆蓋 checkLogin）');
+            })();
+        </script>
 
-    <!-- QRCodeJS -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script src="public/js/main.js"></script>
+        <!-- QRCodeJS -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+        <script src="public/js/main.js"></script>
 
-    <script src="public/js/bg-effects.js"></script>
-    <script src="public/js/ai_chat.js"></script>
-    <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./service-worker.js')
-                .then(reg => console.log('SW registered!', reg))
-                .catch(err => console.log('SW failed!', err))
-        }
-    </script>
+        <script src="public/js/bg-effects.js"></script>
+        <script src="public/js/ai_chat.js"></script>
+        <script>
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('./service-worker.js')
+                    .then(reg => console.log('SW registered!', reg))
+                    .catch(err => console.log('SW failed!', err))
+            }
+        </script>
 </body>
 
 </html>

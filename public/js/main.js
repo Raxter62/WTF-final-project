@@ -395,6 +395,7 @@ async function handleAddWorkout(e) {
         if (json.success) {
             alert('運動記錄已新增');
             form.reset();
+            document.getElementById('calorie-display-area').classList.add('hidden');
             setupDateTimeDefaults();
             setGlobalRange(globalTimeRange);
         } else {
@@ -408,9 +409,16 @@ async function handleAddWorkout(e) {
 
 function setGlobalRange(range) {
     globalTimeRange = range;
+
+    // Update active button state
+    document.querySelectorAll('.g-time-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.textContent.includes(range === '1wk' ? '1周' : range === '1m' ? '1月' : range === '3m' ? '3月' : '1天'));
+    });
+
     fetchStats(range);
     loadLeaderboard();
 }
+window.setGlobalRange = setGlobalRange;
 
 async function fetchStats(range) {
     try {
@@ -423,55 +431,62 @@ async function fetchStats(range) {
             return;
         }
 
-        renderChart(json.daily, range);
-        renderTypeChart(json.types);
+        // json.time_chart, json.type_chart, json.cal_chart
+        renderChart(json.time_chart || [], range);
+        renderTypeChart(json.type_chart || []);
+        renderCalorieChart(json.cal_chart || [], range);
+
     } catch (e) {
         console.error('Stats error:', e);
     }
 }
 
 function getDemoStats(range) {
-    const daily = range === '1d'
-        ? [{ date: '2025-01-01', total: 30 }, { date: '2025-01-02', total: 45 }]
-        : [{ date: 'Week 1', total: 120 }];
-    const types = [{ type: '跑步', total: 60 }, { type: '瑜珈', total: 30 }];
-    return { success: true, daily, types, range };
+    // Mock demo data matching new logic structure if needed, or leave simple for now
+    return {
+        success: true,
+        time_chart: [{ label: '09:00', total: 30 }],
+        type_chart: [{ type: 'Running', total: 30 }],
+        cal_chart: [{ label: '09:00', total: 150 }],
+        range
+    };
 }
 
-let dailyChart, typeChart;
+let dailyChart, typeChart, calChart;
 
 function renderChart(data, range) {
-    const ctx = document.getElementById('daily-chart');
+    const ctx = document.getElementById('chart-bar-time');
     if (!ctx) return;
 
-    const labels = data.map(d => d.date);
+    const labels = data.map(d => d.label);
     const values = data.map(d => d.total);
 
     if (dailyChart) dailyChart.destroy();
 
     dailyChart = new Chart(ctx, {
-        type: 'line',
+        type: 'bar',
         data: {
             labels,
             datasets: [{
-                label: '運動時間（分鐘）',
+                label: '運動時間 (min)',
                 data: values,
-                borderColor: '#FF4757',
-                backgroundColor: 'rgba(255,71,87,0.1)',
-                fill: true,
-                tension: 0.4
+                backgroundColor: 'rgba(255,71,87,0.6)',
+                borderRadius: 4
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { display: false } }
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true }
+            }
         }
     });
 }
 
 function renderTypeChart(data) {
-    const ctx = document.getElementById('type-chart');
+    const ctx = document.getElementById('chart-pie-types');
     if (!ctx) return;
 
     const labels = data.map(d => d.type);
@@ -485,12 +500,45 @@ function renderTypeChart(data) {
             labels,
             datasets: [{
                 data: values,
-                backgroundColor: ['#FF4757', '#5352ED', '#F79F1F', '#00D2D3', '#EE5A6F']
+                backgroundColor: ['#FF4757', '#5352ED', '#F79F1F', '#00D2D3', '#EE5A6F', '#2ED573']
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false
+        }
+    });
+}
+
+function renderCalorieChart(data, range) {
+    const ctx = document.getElementById('chart-line-calories');
+    if (!ctx) return;
+
+    const labels = data.map(d => d.label);
+    const values = data.map(d => d.total);
+
+    if (calChart) calChart.destroy();
+
+    calChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [{
+                label: '熱量消耗 (kcal)',
+                data: values,
+                borderColor: '#F79F1F',
+                backgroundColor: 'rgba(247, 159, 31, 0.1)',
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true }
+            }
         }
     });
 }
@@ -615,6 +663,12 @@ window.calculateCalories = function () {
 
     if (!currentUser || !currentUser.weight) {
         // 如果沒有體重，隱藏顯示區並不計算
+        displayArea.classList.add('hidden');
+        caloriesInput.value = 0;
+        return;
+    }
+
+    if (!type || minutes <= 0) {
         displayArea.classList.add('hidden');
         caloriesInput.value = 0;
         return;

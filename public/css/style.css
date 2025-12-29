@@ -41,6 +41,11 @@ html {
     scroll-behavior: smooth;
 }
 
+section {
+    scroll-margin-top: 120px;
+    /* Offset for fixed navbar */
+}
+
 /* Warm Animated Background */
 body {
     background: linear-gradient(-45deg, var(--warm-1), var(--warm-2), var(--warm-3), var(--warm-2));
@@ -413,11 +418,24 @@ body {
 /* --- Charts --- */
 /* (See bottom for updated styles) */
 
+/* Ensure buttons are clickable */
+.global-time-switch {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin-bottom: 20px;
+    position: relative;
+    z-index: 100;
+    /* Fix clickability */
+}
+
 .charts-grid-advanced {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
     gap: 30px;
     width: 100%;
+    position: relative;
+    z-index: 40;
 }
 
 .chart-box {
@@ -466,11 +484,14 @@ body {
 .leaderboard-card {
     background: white;
     padding: 2rem;
+    padding-bottom: 8rem;
+    /* Extend background down for wave overlap */
     box-shadow: var(--shadow-soft);
     border-radius: 20px;
     width: 100%;
     border: 1px solid #fff;
-    margin-bottom: 50px;
+    margin-bottom: 0px;
+    /* Remove bottom margin so wave sits flush/over */
 }
 
 .leaderboard-table {
