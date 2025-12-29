@@ -67,32 +67,36 @@ function checkAchievements(PDO $pdo, int $userId): array {
     $stmt->execute([$userId]);
     $totalCal = (int)$stmt->fetchColumn();
 
-    // Streak Calculation
+    // Streak Calculation (Max Streak)
     // Get all distinct dates
     $stmt = $pdo->prepare("SELECT DISTINCT date(date) as d FROM workouts WHERE user_id = ? ORDER BY d DESC");
     $stmt->execute([$userId]);
     $dates = $stmt->fetchAll(PDO::FETCH_COLUMN);
     
-    $currentStreak = 0;
+    $maxStreak = 0;
+    $currentSeq = 0;
+
     if (count($dates) > 0) {
-        // Check if latest is today or yesterday (streak active)
-        $today = date('Y-m-d');
-        $yesterday = date('Y-m-d', strtotime('-1 day'));
-        $latest = $dates[0];
-        
-        if ($latest === $today || $latest === $yesterday) {
-            $currentStreak = 1;
-            $prev = $latest;
-            for ($i = 1; $i < count($dates); $i++) {
-                $curr = $dates[$i];
-                $expected = date('Y-m-d', strtotime("$prev -1 day"));
-                if ($curr === $expected) {
-                    $currentStreak++;
-                    $prev = $curr;
-                } else {
-                    break;
-                }
+        $currentSeq = 1;
+        $maxStreak = 1;
+        $prev = $dates[0];
+
+        for ($i = 1; $i < count($dates); $i++) {
+            $curr = $dates[$i];
+            // Check if current date is exactly 1 day before previous date
+            $expected = date('Y-m-d', strtotime("$prev -1 day"));
+            
+            if ($curr === $expected) {
+                $currentSeq++;
+            } else {
+                $currentSeq = 1; // Reset sequence
             }
+
+            if ($currentSeq > $maxStreak) {
+                $maxStreak = $currentSeq;
+            }
+            
+            $prev = $curr;
         }
     }
 
@@ -100,9 +104,9 @@ function checkAchievements(PDO $pdo, int $userId): array {
     // type: DB key, title: Display Name, img: Image file, check: Closure
     $rules = [
         // Streaks
-        ['id' => 'streak_3', 'title' => '連續運動3天', 'img' => 'Achievement1.png', 'cond' => fn() => $currentStreak >= 3],
-        ['id' => 'streak_7', 'title' => '連續運動7天', 'img' => 'Achievement2.png', 'cond' => fn() => $currentStreak >= 7],
-        ['id' => 'streak_30', 'title' => '連續運動30天', 'img' => 'Achievement3.png', 'cond' => fn() => $currentStreak >= 30],
+        ['id' => 'streak_3', 'title' => '連續運動3天', 'img' => 'Achievement1.png', 'cond' => fn() => $maxStreak >= 3],
+        ['id' => 'streak_7', 'title' => '連續運動7天', 'img' => 'Achievement2.png', 'cond' => fn() => $maxStreak >= 7],
+        ['id' => 'streak_30', 'title' => '連續運動30天', 'img' => 'Achievement3.png', 'cond' => fn() => $maxStreak >= 30],
 
         // Calories
         ['id' => 'cal_1000', 'title' => '總消耗卡路里達1000', 'img' => 'Achievement4.png', 'cond' => fn() => $totalCal >= 1000],
@@ -133,7 +137,8 @@ function checkAchievements(PDO $pdo, int $userId): array {
             // Unlock!
             $stmt = $pdo->prepare("INSERT INTO achievements (user_id, type) VALUES (?, ?)");
             $stmt->execute([$userId, $rule['id']]);
-            $newlyUnlocked[] = $rule['title'];
+            // Return full info for frontend notification
+            $newlyUnlocked[] = ['title' => $rule['title'], 'img' => $rule['img']];
 
             // Send Email
             $userEmail = getUserEmail($pdo, $userId);

@@ -422,6 +422,14 @@ async function handleAddWorkout(e) {
 
         if (json.success) {
             alert('運動記錄已新增');
+
+            // Check for new achievements
+            if (json.achievements && json.achievements.length > 0) {
+                json.achievements.forEach(ach => {
+                    showAchievementNotification(ach.title, ach.img);
+                });
+            }
+
             form.reset();
             document.getElementById('calorie-display-area').classList.add('hidden');
             setupDateTimeDefaults();
@@ -474,7 +482,110 @@ async function fetchStats(range) {
         console.error('Stats error:', e);
     } finally {
         charts.forEach(c => c.style.opacity = '1');
+        updateChartDateLabel(range);
     }
+}
+
+function updateChartDateLabel(range) {
+    const titleEls = document.querySelectorAll('.chart-box .chart-title');
+    const label = getDateRangeString(range);
+
+    titleEls.forEach(titleEl => {
+        // Reset base title
+        if (!titleEl.dataset.baseTitle) {
+            // Check if there is already a date-label inside, if so, ignore it for baseTitle
+            const existingSpan = titleEl.querySelector('.date-label');
+            const clone = titleEl.cloneNode(true);
+            if (existingSpan) {
+                const cloneSpan = clone.querySelector('.date-label');
+                if (cloneSpan) cloneSpan.remove();
+            }
+            titleEl.dataset.baseTitle = clone.textContent.trim();
+        }
+
+        // Create or update span
+        let dateSpan = titleEl.querySelector('.date-label');
+        if (!dateSpan) {
+            dateSpan = document.createElement('span');
+            dateSpan.className = 'date-label';
+            dateSpan.style.cssText = "font-size: 0.9rem; color: #666; margin-left: 10px; font-weight: normal;";
+            titleEl.appendChild(dateSpan);
+        }
+        dateSpan.textContent = label;
+    });
+}
+
+function getDateRangeString(range) {
+    const now = new Date();
+    const formatDate = (d) => `${d.getMonth() + 1}/${d.getDate()}`;
+
+    if (range === '1d') {
+        return formatDate(now);
+    } else if (range === '1wk') {
+        // Current week (Monday to Sunday) logic matching backend "1wk"
+        // Backend uses date_trunc('week', CURRENT_DATE). 
+        // JS: getDay(): 0=Sun, 1=Mon.
+        const day = now.getDay();
+        const diff = now.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+        const monday = new Date(now.setDate(diff));
+        const sunday = new Date(now.setDate(diff + 6));
+        return `${formatDate(monday)}~${formatDate(sunday)}`;
+    } else if (range === '1m') {
+        // Current month 1st to End
+        const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+        const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        return `${formatDate(firstDay)}~${formatDate(lastDay)}`;
+    } else if (range === '3m') {
+        // Recent 3 months (Current month and previous 2)
+        const firstDay = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+        const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        return `${formatDate(firstDay)}~${formatDate(lastDay)}`;
+    }
+    return '';
+}
+
+// 顯示成就通知
+function showAchievementNotification(title, imgName) {
+    const notifyBox = document.createElement('div');
+    notifyBox.className = 'achievement-notification';
+    notifyBox.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <img src="public/image/Achievement/${imgName}" alt="Medal" style="width: 50px; height: 50px; object-fit: contain;">
+            <div>
+                <h4 style="margin: 0; color: #ff9800; font-size: 1.1rem;">🏆 成就解鎖！</h4>
+                <p style="margin: 5px 0 0 0; color: #333; font-weight: bold;">${title}</p>
+            </div>
+        </div>
+    `;
+
+    // Style (Inline for simplicity or add to CSS)
+    Object.assign(notifyBox.style, {
+        position: 'fixed',
+        bottom: '20px',
+        right: '-320px', // Start off-screen
+        width: '300px',
+        background: 'white',
+        boxShadow: '0 5px 20px rgba(0,0,0,0.2)',
+        borderRadius: '12px',
+        padding: '1.5rem',
+        zIndex: '10000',
+        transition: 'right 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)' // Spring effect
+    });
+
+    document.body.appendChild(notifyBox);
+
+    // Slide In
+    setTimeout(() => {
+        notifyBox.style.right = '20px';
+    }, 100);
+
+    // Slide Out after 5 seconds
+    setTimeout(() => {
+        notifyBox.style.right = '-320px';
+        setTimeout(() => {
+            notifyBox.remove();
+        }, 600); // Wait for transition
+    }, 5000);
 }
 
 function getDemoStats(range) {

@@ -198,8 +198,9 @@ try {
         $stmt->execute([':uid' => $_SESSION['user_id'], ':cal' => $calories]);
         
         // Gamification Hooks
+        $achievements = [];
         if (function_exists('checkAchievements')) {
-            checkAchievements($pdo, $_SESSION['user_id']);
+            $achievements = checkAchievements($pdo, $_SESSION['user_id']);
         }
         if (function_exists('checkLeaderboardChanges') && !empty($preRanks)) {
             checkLeaderboardChanges($pdo, $preRanks);
@@ -208,7 +209,7 @@ try {
             logLeaderboardSnapshot($pdo);
         }
         
-        sendResponse(['success' => true, 'message' => 'Workout added']);
+        sendResponse(['success' => true, 'message' => 'Workout added', 'achievements' => $achievements]);
     }
     
         if ($action === 'get_stats') {
