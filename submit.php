@@ -31,6 +31,8 @@ try {
     // Test database
     try {
         $pdo->query('SELECT 1');
+        // Set Timezone for current session
+        $pdo->exec("SET TIME ZONE 'Asia/Taipei'");
     } catch (PDOException $e) {
         throw new Exception('Database query test failed: ' . $e->getMessage());
     }
@@ -57,10 +59,6 @@ try {
         $email = trim($input['email'] ?? '');
         $pass = $input['password'] ?? '';
         $name = trim($input['display_name'] ?? 'User');
-        
-        if ($email === '' || $pass === '') {
-            sendResponse(['success' => false, 'message' => 'Please enter email and password']);
-        }
         
         $stmt = $pdo->prepare('SELECT id FROM users WHERE email = :email LIMIT 1');
         $stmt->execute([':email' => $email]);
@@ -388,34 +386,33 @@ try {
     }
     
     if ($action === 'get_leaderboard') {
-        // Use user_totals for faster specific total, or join workouts for range-based leaderboards.
-        // User asked for "user_totals without input and update user total calories". 
-        // Let implies we should maybe use user_totals?
-        // But get_leaderboard usually has a time range (e.g. 30 days). user_totals is ALL TIME.
-        // If I change to user_totals, I lose the 30-day window.
-        // However, the user said "DB user_totals no input and update user total calories", implying they rely on it.
-        // Let's assume standard leaderboard is all-time or monthly.
-        // The current query uses `WHERE DATE(w.date) >= DATE_SUB(NOW(), INTERVAL 30 DAY)`.
-        // I will keep the dynamic query but sum CALORIES as per UI.
-        // And I added the update logic for user_totals above so the table is now actually used/maintained.
+        $range = $_GET['range'] ?? '1m'; // Default to 1m to show something useful
         
+        $dateCondition = "DATE(w.date) >= CURRENT_DATE - INTERVAL '30 days'";
+        
+        if ($range === '1d') {
+            $dateCondition = "DATE(w.date) >= CURRENT_DATE"; 
+        } elseif ($range === '1wk') {
+            $dateCondition = "DATE(w.date) >= date_trunc('week', CURRENT_DATE)";
+        } elseif ($range === '1m') {
+            $dateCondition = "DATE(w.date) >= date_trunc('month', CURRENT_DATE)";
+        } elseif ($range === '3m') {
+            $dateCondition = "DATE(w.date) >= date_trunc('month', CURRENT_DATE - INTERVAL '2 months')";
+        }
+
         $stmt = $pdo->prepare(
-            'SELECT u.display_name, SUM(w.calories) as total 
+            "SELECT u.display_name, SUM(w.calories) as total 
              FROM users u 
              JOIN workouts w ON u.id = w.user_id 
-             WHERE DATE(w.date) >= CURRENT_DATE - INTERVAL \'30 days\'
+             WHERE $dateCondition
              GROUP BY u.id 
              ORDER BY total DESC 
-             LIMIT 10'
+             LIMIT 10"
         );
-        // Note: DATE_SUB(NOW(), INTERVAL 30 DAY) is MySQL.
-        // Postgres uses: CURRENT_DATE - INTERVAL '30 days'
-        // FIXING SQL SYNTAX FOR POSTGRES HERE.
-        
         $stmt->execute();
         $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
-        sendResponse(['success' => true, 'data' => $data]);
+        sendResponse(['success' => true, 'data' => $data, 'range' => $range]);
     }
     
     // === LINE Bot Actions ===

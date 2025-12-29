@@ -60,6 +60,34 @@ async function checkLogin() {
     }
 }
 
+async function loadLeaderboard() {
+    const tbody = document.querySelector('#leaderboard-table tbody');
+    if (!tbody) return;
+
+    try {
+        const range = globalTimeRange || '1m';
+        const res = await fetch(`${API_URL}?action=get_leaderboard&range=${range}`, { credentials: 'same-origin' });
+        const json = await res.json();
+
+        if (json.success) {
+            tbody.innerHTML = json.data.map((user, index) => `
+                <tr>
+                    <td>${index + 1}</td>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span>${user.display_name}</span>
+                            ${index === 0 ? '👑' : ''}
+                        </div>
+                    </td>
+                    <td>${user.total}</td>
+                </tr>
+            `).join('');
+        }
+    } catch (e) {
+        console.error('Leaderboard error:', e);
+    }
+}
+
 function showLogin() {
     const authView = document.getElementById('auth-view');
     const dashboardView = document.getElementById('dashboard-view');
