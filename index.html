@@ -340,7 +340,7 @@
             <!-- 右 -->
             <div class="hero-right">
                 <h2 style="margin-bottom: 2rem; color: var(--secondary);">今天動了多少？</h2>
-                <form id="add-workout-form">
+                <form id="add-workout-form" autocomplete="off">
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                         <div>
                             <label class="form-label">日期&時間</label>
@@ -353,7 +353,8 @@
                         </div>
                         <div>
                             <label class="form-label">種類</label>
-                            <select class="form-control" name="type" id="input-type" onchange="calculateCalories()">
+                            <select class="form-control" name="type" id="input-sport" onchange="calculateCalories()">
+                                <option value="" disabled selected>請選擇</option>
                                 <option value="跑步">跑步</option>
                                 <option value="重訓">重訓</option>
                                 <option value="腳踏車">腳踏車</option>
@@ -365,7 +366,7 @@
                         <div style="grid-column: span 2;">
                             <label class="form-label">時間 (分鐘)</label>
                             <input type="number" class="form-control" name="minutes" id="input-minutes" min="1" required
-                                oninput="calculateCalories()">
+                                oninput="calculateCalories()" placeholder="輸入分鐘數">
                         </div>
                     </div>
                     <div id="calorie-display-area" class="hidden"
@@ -610,6 +611,8 @@
         })();
     </script>
 
+    <!-- QRCodeJS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="public/js/main.js"></script>
 
     <script src="public/js/bg-effects.js"></script>

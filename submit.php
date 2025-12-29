@@ -112,7 +112,7 @@ try {
             sendResponse(['success' => false, 'message' => 'Not logged in']);
         }
         
-        $stmt = $pdo->prepare('SELECT id, email, display_name, height, weight FROM users WHERE id = :id');
+        $stmt = $pdo->prepare('SELECT id, email, display_name, height, weight, avatar_id FROM users WHERE id = :id');
         $stmt->execute([':id' => $_SESSION['user_id']]);
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
         
@@ -151,10 +151,10 @@ try {
             sendResponse(['success' => false, 'message' => 'Not logged in']);
         }
         
-        $avatar = trim($input['avatar_url'] ?? '');
+        $avatarId = intval($input['avatar_id'] ?? 1);
         
-        $stmt = $pdo->prepare('UPDATE users SET avatar_url = :avatar WHERE id = :id');
-        $stmt->execute([':avatar' => $avatar, ':id' => $_SESSION['user_id']]);
+        $stmt = $pdo->prepare('UPDATE users SET avatar_id = :aid WHERE id = :id');
+        $stmt->execute([':aid' => $avatarId, ':id' => $_SESSION['user_id']]);
         
         sendResponse(['success' => true, 'message' => 'Avatar updated']);
     }
@@ -250,8 +250,7 @@ try {
         $expires = date('Y-m-d H:i:s', strtotime('+10 minutes'));
         
         $stmt = $pdo->prepare(
-            'INSERT INTO bind_codes (user_id, code, expires_at) VALUES (:uid, :code, :exp) 
-             ON CONFLICT (user_id) DO UPDATE SET code = :code, expires_at = :exp'
+            'UPDATE users SET line_bind_code = :code, line_bind_code_expires_at = :exp WHERE id = :uid'
         );
         $stmt->execute([':uid' => $_SESSION['user_id'], ':code' => $code, ':exp' => $expires]);
         

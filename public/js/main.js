@@ -36,19 +36,7 @@ function initApp() {
 }
 
 function setupDateTimeDefaults() {
-    const datePart = document.getElementById('input-date-part');
-    const timePart = document.getElementById('input-time-part');
-    if (datePart && timePart) {
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const day = String(now.getDate()).padStart(2, '0');
-        const hours = String(now.getHours()).padStart(2, '0');
-        const minutes = String(now.getMinutes()).padStart(2, '0');
-
-        datePart.value = `${year}-${month}-${day}`;
-        timePart.value = `${hours}:${minutes}`;
-    }
+    // 移除預設時間設定，保持輸入框空白
 }
 
 // === Auth ===
@@ -379,8 +367,12 @@ async function handleAddWorkout(e) {
     const minutes = parseInt(form.querySelector('#input-minutes').value) || 0;
     const calories = parseInt(form.querySelector('#input-calories').value) || 0;
 
-    if (!currentUser || !currentUser.height || !currentUser.weight) {
-        alert('請先完善個人資料');
+    // 嚴格檢查身高體重 (轉為浮點數判斷是否大於 0)
+    const userHeight = parseFloat(currentUser?.height || 0);
+    const userWeight = parseFloat(currentUser?.weight || 0);
+
+    if (!currentUser || userHeight <= 0 || userWeight <= 0) {
+        alert('請先完善個人資料，點擊名字旁的鉛筆即可編輯');
         showEditProfileModal();
         return;
     }
@@ -577,13 +569,13 @@ function updateProfileUI() {
     const weightEl = document.getElementById('user-weight');
 
     if (heightEl && currentUser.height) {
-        heightEl.textContent = currentUser.height + ' cm';
+        heightEl.textContent = Math.round(currentUser.height) + ' cm';
     } else if (heightEl) {
         heightEl.textContent = '未設定';
     }
 
     if (weightEl && currentUser.weight) {
-        weightEl.textContent = currentUser.weight + ' kg';
+        weightEl.textContent = Math.round(currentUser.weight) + ' kg';
     } else if (weightEl) {
         weightEl.textContent = '未設定';
     }
@@ -600,7 +592,7 @@ async function setupCoachInteraction() {
 
 // 卡路里計算
 window.calculateCalories = function () {
-    const typeSelect = document.getElementById('input-type');
+    const typeSelect = document.getElementById('input-sport');
     const minutesInput = document.getElementById('input-minutes');
     const caloriesInput = document.getElementById('input-calories');
     const calcValDisplay = document.getElementById('calc-val');
@@ -730,12 +722,12 @@ async function saveProfile() {
 
     // 驗證
     if (!height || height <= 0 || height > 300) {
-        alert('請輸入有效的身高（1-300 cm）');
+        alert('請輸入有效的身高');
         return;
     }
 
     if (!weight || weight <= 0 || weight > 500) {
-        alert('請輸入有效的體重（1-500 kg）');
+        alert('請輸入有效的體重');
         return;
     }
 
@@ -847,5 +839,78 @@ async function updateAvatarOnServer(avatarId) {
         console.error('❌ 頭像更新錯誤:', err);
     }
 }
+
+
+// === LINE Binding Functions ===
+window.generateBindCode = async function () {
+    console.log('📱 產生 LINE 綁定碼...');
+    try {
+        const res = await fetch(`${API_URL}?action=generate_bind_code`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin'
+        });
+        const json = await res.json();
+
+        if (json.success) {
+            // 顯示綁定碼區域
+            document.getElementById('bind-code-display').style.display = 'block';
+            document.getElementById('bind-code-text').textContent = json.code;
+
+            // 清除舊的 QR Code
+            const qrContainer = document.getElementById('qrcode');
+            qrContainer.innerHTML = '';
+
+            // 產生新的 QR Code (指向加好友連結)
+            // 假設 Bot ID 是 @063jezzz
+            const lineBotUrl = 'https://line.me/R/ti/p/@063jezzz';
+            new QRCode(qrContainer, {
+                text: lineBotUrl,
+                width: 128,
+                height: 128
+            });
+
+            alert('綁定碼已產生！請掃描 QR Code 加好友並輸入綁定碼。');
+        } else {
+            alert('產生失敗: ' + (json.message || '未知錯誤'));
+        }
+    } catch (err) {
+        console.error('❌ 產生綁定碼錯誤:', err);
+        alert('連線錯誤');
+    }
+};
+
+window.unbindLine = async function () {
+    if (!confirm('確定要解除 LINE 綁定嗎？無法再接收運動提醒。')) return;
+
+    console.log('🔗 解除 LINE 綁定...');
+    try {
+        const res = await fetch(`${API_URL}?action=line_unbind`, {
+            method: 'POST',
+            credentials: 'same-origin'
+        });
+        const json = await res.json();
+
+        if (json.success) {
+            alert('✅ 已解除綁定');
+            // 更新 UI (隱藏已綁定區塊，顯示未綁定區塊)
+            const notBoundDiv = document.getElementById('not-bound');
+            const boundDiv = document.getElementById('already-bound');
+            const bindCodeDisplay = document.getElementById('bind-code-display');
+
+            if (notBoundDiv) notBoundDiv.style.display = 'block';
+            if (boundDiv) boundDiv.style.display = 'none';
+            if (bindCodeDisplay) bindCodeDisplay.style.display = 'none';
+
+            // 同步更新 currentUser 狀態 (如果需要)
+            if (currentUser) currentUser.line_user_id = null;
+        } else {
+            alert('解除失敗: ' + (json.message || '未知錯誤'));
+        }
+    } catch (err) {
+        console.error('❌ 解除綁定錯誤:', err);
+        alert('連線錯誤');
+    }
+};
 
 console.log('✅ main.js 載入完成');
