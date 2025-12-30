@@ -46,7 +46,7 @@ try {
     }
     
     elseif ($action === 'bind_user') {
-        $code = $input['code'] ?? '';
+        $code = strtoupper(trim($input['code'] ?? ''));
         if (!$code) {
             throw new Exception("請輸入綁定碼");
         }
