@@ -8,7 +8,7 @@ function getMetricValue(array $row, string $key): int {
 /**
  * Send Email via Resend API (using curl)
  */
-function sendResendEmail(string $to, string $subject, string $htmlBody): bool {
+function sendResendEmail(string $to, string $subject, string $htmlBody, ?PDO $pdo = null, int $userId = 0, string $type = 'general'): bool {
     $apiKey = defined('RESEND_API_KEY') ? RESEND_API_KEY : getenv('RESEND_API_KEY');
     if (!$apiKey) {
         error_log("RESEND_API_KEY not set.");
@@ -38,7 +38,18 @@ function sendResendEmail(string $to, string $subject, string $htmlBody): bool {
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
-    if ($httpCode >= 200 && $httpCode < 300) {
+    $success = ($httpCode >= 200 && $httpCode < 300);
+
+    if ($pdo && $userId > 0 && $success) {
+        try {
+            $stmt = $pdo->prepare("INSERT INTO email_notifications (user_id, type, sent_at) VALUES (?, ?, NOW())");
+            $stmt->execute([$userId, $type]);
+        } catch (Exception $e) {
+            error_log("Failed to log email: " . $e->getMessage());
+        }
+    }
+
+    if ($success) {
         return true;
     } else {
         error_log("Resend Email Failed: $result");
@@ -149,7 +160,7 @@ function checkAchievements(PDO $pdo, int $userId): array {
                     <p>繼續保持運動的好習慣！</p>
                     <img src='$imgUrl' style='max-width: 300px; border-radius: 10px; margin-top: 20px;' alt='Achievement'>
                 ";
-                sendResendEmail($userEmail, "【FitConnect】成就解鎖通知", $html);
+                sendResendEmail($userEmail, "【FitConnect】成就解鎖通知", $html, $pdo, $userId, 'achievement');
             }
         }
     }
@@ -261,7 +272,7 @@ function checkLeaderboardChanges(PDO $pdo, array $preUpdateRanks): void {
                     <p>您的排名已從第 <strong>$oldRank</strong> 名下降至第 <strong>$newRank</strong> 名。</p>
                     <p>快去運動奪回您的寶座吧！</p>
                 ";
-                sendResendEmail($email, $subject, $html);
+                sendResendEmail($email, $subject, $html, $pdo, $uid, 'rank_drop');
             }
         }
     }

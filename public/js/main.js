@@ -980,6 +980,19 @@ async function saveProfile() {
             updateProfileUI();
 
             closeEditProfileModal();
+
+            // Reset Workout Inputs
+            const inputSport = document.getElementById('input-sport');
+            const inputMin = document.getElementById('input-minutes');
+            const inputCal = document.getElementById('input-calories');
+            const displayArea = document.getElementById('calorie-display-area');
+
+            if (inputSport) inputSport.value = '';
+            if (inputMin) inputMin.value = '';
+            if (inputCal) inputCal.value = '';
+            if (displayArea) displayArea.classList.add('hidden');
+            setupDateTimeDefaults(); // Reset date/time if needed
+
             alert('✅ 個人資料已更新！');
         } else {
             alert('儲存失敗: ' + (json.message || '未知錯誤'));
