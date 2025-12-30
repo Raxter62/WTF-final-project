@@ -10,11 +10,20 @@ $action = $_GET['action'] ?? $input['action'] ?? '';
 $lineUserId = $input['lineUserId'] ?? '';
 
 if (!$pdo) {
+    error_log("LIFF/api.php: DB Connection Failed");
     echo json_encode(['success' => false, 'message' => 'DB Connection Failed']);
     exit;
 }
 
+// Ensure Timezone matches submit.php to avoid NOW() mismatch
+try {
+    $pdo->exec("SET TIME ZONE 'Asia/Taipei'");
+} catch (Exception $e) {
+    error_log("LIFF/api.php: Set Timezone Failed: " . $e->getMessage());
+}
+
 if (!$lineUserId) {
+    error_log("LIFF/api.php: Missing Line User ID. Input: " . print_r($input, true));
     echo json_encode(['success' => false, 'message' => 'Missing Line User ID']);
     exit;
 }
@@ -47,6 +56,8 @@ try {
     
     elseif ($action === 'bind_user') {
         $code = strtoupper(trim($input['code'] ?? ''));
+        error_log("LIFF Bind Attempt: User=$lineUserId, Code=$code");
+
         if (!$code) {
             throw new Exception("請輸入綁定碼");
         }
@@ -60,6 +71,7 @@ try {
             $update->execute([$lineUserId, $user['id']]);
             echo json_encode(['success' => true, 'message' => '綁定成功']);
         } else {
+            error_log("LIFF Bind Failed: Code not found or expired.");
             throw new Exception("驗證碼錯誤或已過期");
         }
     }

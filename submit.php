@@ -441,14 +441,16 @@ try {
         }
         
         $code = strtoupper(bin2hex(random_bytes(3)));
-        $expires = date('Y-m-d H:i:s', strtotime('+10 minutes'));
+        $code = strtoupper(bin2hex(random_bytes(3)));
         
         $stmt = $pdo->prepare(
-            'UPDATE users SET line_bind_code = :code, line_bind_code_expires_at = :exp WHERE id = :uid'
+            "UPDATE users SET line_bind_code = :code, line_bind_code_expires_at = NOW() + INTERVAL '10 minutes' WHERE id = :uid"
         );
-        $stmt->execute([':uid' => $_SESSION['user_id'], ':code' => $code, ':exp' => $expires]);
+        $stmt->execute([':uid' => $_SESSION['user_id'], ':code' => $code]);
         
-        sendResponse(['success' => true, 'code' => $code, 'expires_at' => $expires]);
+        // We don't return exact expiry time to frontend to avoid confusion, or return a calculated one if needed.
+        // Frontend doesn't essentially use it.
+        sendResponse(['success' => true, 'code' => $code]);
     }
     
     if ($action === 'line_unbind') {
