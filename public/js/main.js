@@ -165,6 +165,27 @@ function showDashboard() {
     }
 
     setGlobalRange('1d');
+
+    // Reset and Update LINE Binding UI
+    const notBoundEl = document.getElementById('not-bound');
+    const alreadyBoundEl = document.getElementById('already-bound');
+    const bindCodeDisplay = document.getElementById('bind-code-display');
+    const qrDiv = document.getElementById('qrcode');
+    const codeText = document.getElementById('bind-code-text');
+
+    if (currentUser.line_user_id) {
+        if (notBoundEl) notBoundEl.style.display = 'none';
+        if (bindCodeDisplay) bindCodeDisplay.style.display = 'none'; // Ensure this is hidden too
+        if (alreadyBoundEl) alreadyBoundEl.style.display = 'block';
+    } else {
+        if (notBoundEl) notBoundEl.style.display = 'block';
+        if (alreadyBoundEl) alreadyBoundEl.style.display = 'none';
+
+        // Key Fix: Reset the Code Display area so it doesn't persist from previous user
+        if (bindCodeDisplay) bindCodeDisplay.style.display = 'none';
+        if (qrDiv) qrDiv.innerHTML = '';
+        if (codeText) codeText.textContent = '------';
+    }
 }
 
 function demoLogin() {

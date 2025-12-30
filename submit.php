@@ -114,7 +114,7 @@ try {
             sendResponse(['success' => false, 'message' => 'Not logged in']);
         }
         
-        $stmt = $pdo->prepare('SELECT id, email, display_name, height, weight, avatar_id FROM users WHERE id = :id');
+        $stmt = $pdo->prepare('SELECT id, email, display_name, height, weight, avatar_id, line_user_id FROM users WHERE id = :id');
         $stmt->execute([':id' => $_SESSION['user_id']]);
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
         

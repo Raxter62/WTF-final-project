@@ -140,11 +140,32 @@ foreach ($events['events'] as $event) {
 http_response_code(200);
 
 // Functions
+
+function getLineAccessToken(): ?string {
+    if (defined('LINE_CHANNEL_TOKEN') && LINE_CHANNEL_TOKEN) return LINE_CHANNEL_TOKEN;
+
+    $t = getenv('LINE_CHANNEL_TOKEN');
+    if ($t) return $t;
+
+    // 有些人命名成 LINE_CHANNEL_ACCESS_TOKEN
+    $t = getenv('LINE_CHANNEL_ACCESS_TOKEN');
+    if ($t) return $t;
+
+    // 你原本寫了 global $accessToken，就也吃它
+    if (isset($GLOBALS['accessToken']) && $GLOBALS['accessToken']) return $GLOBALS['accessToken'];
+
+    return null;
+}
+
+
 function replyLineMessage($replyToken, $text) {
     global $accessToken; 
     // Re-define token here or use constant
-    if (!defined('LINE_CHANNEL_TOKEN')) return;
-    $accessToken = LINE_CHANNEL_TOKEN;
+    $accessToken = getLineAccessToken();
+    if (!$accessToken) {
+        error_log("LINE token missing: set LINE_CHANNEL_TOKEN env or define LINE_CHANNEL_TOKEN");
+        return;
+    }
 
     $url = "https://api.line.me/v2/bot/message/reply";
     $data = [
