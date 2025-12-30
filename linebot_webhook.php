@@ -191,7 +191,7 @@ function replyMainMenu($replyToken) {
                 "altText" => "FitConnect 選單",
                 "template" => [
                     "type" => "buttons",
-                    "thumbnailImageUrl" => "https://fitconnect.up.railway.app/public/image/logo/logo.png", // Must be HTTPS
+                    "thumbnailImageUrl" => "https://fitconnect.up.railway.app/public/image/logo/logo.png",
                     "imageAspectRatio" => "rectangle",
                     "imageSize" => "cover",
                     "imageBackgroundColor" => "#FFFFFF",
@@ -204,19 +204,19 @@ function replyMainMenu($replyToken) {
                     ],
                     "actions" => [
                         [
-                            "type" => "postback",
+                            "type" => "uri",
                             "label" => "🔗 帳號綁定",
-                            "data" => "action=bind_menu"
+                            "uri" => "https://liff.line.me/" . (defined('LIFF_ID') ? LIFF_ID : '') . "?path=bind"
                         ],
                         [
-                            "type" => "postback",
+                            "type" => "uri",
                             "label" => "🏃 新增運動",
-                            "data" => "action=workout_menu"
+                            "uri" => "https://liff.line.me/" . (defined('LIFF_ID') ? LIFF_ID : '') . "?path=workout"
                         ],
                         [
-                            "type" => "postback",
+                            "type" => "uri",
                             "label" => "📝 個人資料",
-                            "data" => "action=profile_menu"
+                            "uri" => "https://liff.line.me/" . (defined('LIFF_ID') ? LIFF_ID : '') . "?path=profile"
                         ],
                         [
                             "type" => "uri",

@@ -180,4 +180,5 @@ define('OPENAI_API_KEY',      getenv('OPENAI_API_KEY') ?: '');
 define('LINE_CHANNEL_SECRET', getenv('LINE_CHANNEL_SECRET') ?: '');
 define('LINE_CHANNEL_ACCESS', getenv('LINE_CHANNEL_ACCESS') ?: '');
 define('LINE_CHANNEL_TOKEN',  getenv('LINE_CHANNEL_TOKEN') ?: '');
+define('LIFF_ID',           getenv('LIFF_ID') ?: '');
 define('RESEND_API_KEY',      getenv('RESEND_API_KEY') ?: '');
