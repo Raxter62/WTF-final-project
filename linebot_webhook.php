@@ -32,10 +32,26 @@ http_response_code(200);
 function handleMessage($text, $replyToken, $lineUserId) {
     global $pdo;
     
-    // 綁定
+    // 綁定帳號（輸入綁定碼）
     if (preg_match('/^綁定\s*(\d{6})$/', $text, $m)) {
         $response = bindAccount($lineUserId, $m[1]);
         replyText($replyToken, $response);
+        return;
+    }
+    
+    // 綁定帳號（按鈕觸發）
+    if ($text === '綁定帳號' || strpos($text, '如何綁定') !== false) {
+        replyText($replyToken, 
+            "🔗 綁定 FitConnect 帳號\n\n" .
+            "步驟：\n" .
+            "1️⃣ 登入 FitConnect 網站\n" .
+            "2️⃣ 前往「LINE 綁定」頁面\n" .
+            "3️⃣ 點擊「產生綁定碼」\n" .
+            "4️⃣ 回到這裡輸入：\n" .
+            "   綁定 123456\n\n" .
+            "💡 綁定碼有效期限 10 分鐘\n\n" .
+            "輸入任何文字顯示主選單"
+        );
         return;
     }
     
@@ -70,10 +86,14 @@ function replyWithMainMenu($replyToken) {
         "altText" => "FitConnect 主選單",
         "template" => [
             "type" => "buttons",
-            "thumbnailImageUrl" => "https://i.imgur.com/placeholder.png", // 可選
             "title" => "FitConnect",
             "text" => "請選擇功能",
             "actions" => [
+                [
+                    "type" => "message",
+                    "label" => "🔗 綁定帳號",
+                    "text" => "綁定帳號"
+                ],
                 [
                     "type" => "message",
                     "label" => "📊 查看記錄",
@@ -88,11 +108,6 @@ function replyWithMainMenu($replyToken) {
                     "type" => "uri",
                     "label" => "🌐 開啟網站",
                     "uri" => "https://your-railway-url.railway.app"
-                ],
-                [
-                    "type" => "message",
-                    "label" => "❓ 使用說明",
-                    "text" => "幫助"
                 ]
             ]
         ]
