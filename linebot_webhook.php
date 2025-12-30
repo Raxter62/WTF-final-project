@@ -1,3 +1,4 @@
+<?php
 // linebot_webhook.php
 require_once 'config.php';
 
