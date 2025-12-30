@@ -22,7 +22,7 @@ function sendResendEmail(string $to, string $subject, string $htmlBody, ?PDO $pd
     ];
 
     $data = [
-        "from" => "FitConnect <onboarding@resend.dev>", // Default testing domain for Resend
+        "from" => "FitConnect <" . (defined('RESEND_FROM_EMAIL') ? RESEND_FROM_EMAIL : 'onboarding@resend.dev') . ">",
         "to" => [$to],
         "subject" => $subject,
         "html" => $htmlBody

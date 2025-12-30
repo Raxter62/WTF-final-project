@@ -182,3 +182,4 @@ define('LINE_CHANNEL_ACCESS', getenv('LINE_CHANNEL_ACCESS') ?: '');
 define('LINE_CHANNEL_TOKEN',  getenv('LINE_CHANNEL_TOKEN') ?: '');
 define('LIFF_ID',           getenv('LIFF_ID') ?: '');
 define('RESEND_API_KEY',      getenv('RESEND_API_KEY') ?: '');
+define('RESEND_FROM_EMAIL',   getenv('RESEND_FROM_EMAIL') ?: 'onboarding@resend.dev');
