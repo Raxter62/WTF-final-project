@@ -405,10 +405,9 @@ try {
     }
     
     if ($action === 'get_leaderboard') {
-        $range = $_GET['range'] ?? '1m'; // Default to 1m to show something useful
+        $range = $_GET['range'] ?? '1m'; 
         
         $dateCondition = "DATE(w.date) >= CURRENT_DATE - INTERVAL '30 days'";
-        
         if ($range === '1d') {
             $dateCondition = "DATE(w.date) >= CURRENT_DATE"; 
         } elseif ($range === '1wk') {
@@ -419,19 +418,46 @@ try {
             $dateCondition = "DATE(w.date) >= date_trunc('month', CURRENT_DATE - INTERVAL '2 months')";
         }
 
+        // Fetch ALL users to calculate rank (Simple approach for consistency)
         $stmt = $pdo->prepare(
-            "SELECT u.display_name, SUM(w.calories) as total 
+            "SELECT u.id, u.display_name, SUM(w.calories) as total 
              FROM users u 
              JOIN workouts w ON u.id = w.user_id 
              WHERE $dateCondition
              GROUP BY u.id 
-             ORDER BY total DESC 
-             LIMIT 10"
+             ORDER BY total DESC"
         );
         $stmt->execute();
-        $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $allRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
-        sendResponse(['success' => true, 'data' => $data, 'range' => $range]);
+        // Calculate Ranks
+        $rankedData = [];
+        $rank = 1;
+        foreach ($allRows as $r) {
+            $r['rank'] = $rank++;
+            $rankedData[] = $r;
+        }
+
+        // Extract Top 10
+        $top10 = array_slice($rankedData, 0, 10);
+
+        // Find Current User Rank (if logged in)
+        $userRankData = null;
+        if (isset($_SESSION['user_id'])) {
+            $uid = $_SESSION['user_id'];
+            foreach ($rankedData as $r) {
+                if ($r['id'] == $uid) {
+                    $userRankData = $r;
+                    break;
+                }
+            }
+            // If user not in Top 10, verify we send it back
+            // Actually, we always send it back if found, frontend decides if it needs to render a separate row
+        } elseif (isset($_SESSION['demo_mode']) && $_SESSION['demo_mode']) {
+             // Demo handling if needed, or frontend handles it
+        }
+        
+        sendResponse(['success' => true, 'data' => $top10, 'user_rank' => $userRankData, 'range' => $range]);
     }
     
     // === LINE Bot Actions ===

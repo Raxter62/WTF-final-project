@@ -5,6 +5,7 @@ let currentUser = null;
 let isDemoMode = false;
 let globalTimeRange = '1d';
 let bindPollInterval = null;
+let leaderboardPollInterval = null; // 排行榜即時更新 Timer
 
 const SPORT_ICONS = {
     '跑步': '🏃', '重訓': '🏋️', '腳踏車': '🚴',
@@ -167,6 +168,9 @@ function showDashboard() {
 
     setGlobalRange('1d');
 
+    // Start Leaderboard Polling
+    startLeaderboardPolling();
+
     // Reset and Update LINE Binding UI
     const notBoundEl = document.getElementById('not-bound');
     const alreadyBoundEl = document.getElementById('already-bound');
@@ -206,6 +210,7 @@ async function logout() {
 
     // 清除前端狀態
     if (bindPollInterval) clearInterval(bindPollInterval);
+    stopLeaderboardPolling();
     isDemoMode = false;
     currentUser = null;
 
@@ -227,9 +232,6 @@ function setupForms() {
 
         loginForm.addEventListener('submit', handleLogin);
         console.log('✅ 登入表單已綁定');
-
-        // 備用：也綁定 onsubmit
-        loginForm.onsubmit = handleLogin;
     } else {
         console.error('❌ 找不到 login-form 元素');
     }
@@ -237,7 +239,6 @@ function setupForms() {
     if (registerForm) {
         registerForm.onsubmit = null;
         registerForm.addEventListener('submit', handleRegister);
-        registerForm.onsubmit = handleRegister;
         console.log('✅ 註冊表單已綁定');
     } else {
         console.error('❌ 找不到 register-form 元素');
@@ -756,25 +757,82 @@ async function loadLeaderboard() {
         tbody.innerHTML = '';
 
         users.forEach((u, i) => {
-            const tr = document.createElement('tr');
-            const rank = i < 3 ? ['🥇', '🥈', '🥉'][i] : (i + 1);
-            const name = u.display_name || 'User';
-
-            tr.innerHTML = `
-                <td><span style="font-size: 1.2rem;">${rank}</span></td>
-                <td><strong>${name}</strong></td>
-                <td>${u.total}</td>
-            `;
-
-            if (currentUser && name === currentUser.display_name) {
-                tr.style.background = 'rgba(255, 71, 87, 0.1)';
-            }
-            tbody.appendChild(tr);
+            renderRow(tbody, u, i + 1);
         });
+
+        // 檢查是否需要顯示當前使用者（只有當使用者不在前 10 名時）
+        if (json.user_rank && json.user_rank.rank > 10) {
+            // 分隔線
+            const sep = document.createElement('tr');
+            sep.innerHTML = `<td colspan="3" style="text-align: center; color: #999; letter-spacing: 5px; background: rgba(0,0,0,0.02);">...</td>`;
+            tbody.appendChild(sep);
+
+            // 使用者行
+            renderRow(tbody, json.user_rank, json.user_rank.rank, true);
+        }
 
     } catch (e) {
         console.error('Leaderboard error:', e);
         tbody.innerHTML = '<tr><td colspan="3">載入失敗</td></tr>';
+    }
+}
+
+function renderRow(tbody, u, rankVal, isSticky = false) {
+    const tr = document.createElement('tr');
+
+    // Rank Display (1, 2, 3 uses medals, others number)
+    // Note: rankVal comes from backend or index + 1
+    // Ideally backend should provide rank, but for top 10 simple index works.
+    // For sticky row, we MUST use the rank from object.
+
+    let displayRank = rankVal;
+    if (u.rank) displayRank = u.rank; // Use reliable backend rank if available
+
+    let rankLabel = displayRank;
+    if (displayRank === 1) rankLabel = '🥇';
+    else if (displayRank === 2) rankLabel = '🥈';
+    else if (displayRank === 3) rankLabel = '🥉';
+
+    const name = u.display_name || 'User';
+
+    tr.innerHTML = `
+        <td><span style="font-size: 1.2rem;">${rankLabel}</span></td>
+        <td><strong>${name}</strong></td>
+        <td>${u.total}</td>
+    `;
+
+    // Highlight if current user
+    if ((currentUser && name === currentUser.display_name) || isSticky) {
+        tr.style.background = 'rgba(255, 71, 87, 0.15)'; // Slightly stronger highlight for sticky
+        tr.style.border = '2px solid rgba(255, 71, 87, 0.3)';
+    }
+
+    tbody.appendChild(tr);
+}
+
+// === Leaderboard Polling ===
+function startLeaderboardPolling() {
+    stopLeaderboardPolling(); // Stop existing if any
+    console.log('⏳ 啟動排行榜自動更新 (每 30 秒)...');
+
+    // Initial load is already called in showDashboard -> setGlobalRange -> fetchStats -> loadLeaderboard ?? 
+    // Wait, setGlobalRange calls loadLeaderboard. So we just set interval.
+
+    leaderboardPollInterval = setInterval(() => {
+        // Only load if dashboard is visible to save resources (simple check)
+        const dashboardView = document.getElementById('dashboard-view');
+        if (dashboardView && !dashboardView.classList.contains('hidden')) {
+            console.log('🔄 自動更新排行榜...');
+            loadLeaderboard();
+        }
+    }, 30000); // 30 seconds
+}
+
+function stopLeaderboardPolling() {
+    if (leaderboardPollInterval) {
+        clearInterval(leaderboardPollInterval);
+        leaderboardPollInterval = null;
+        console.log('🛑 停止排行榜自動更新');
     }
 }
 

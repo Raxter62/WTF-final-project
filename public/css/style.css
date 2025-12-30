@@ -304,6 +304,29 @@ body {
     width: 80%;
 }
 
+/* Edit Profile Button (Matches Avatar Arrow) */
+.edit-profile-btn {
+    width: 40px;
+    height: 40px;
+    color: #f1efef;
+    /* color: white; */
+    /* Kept slightly off-white as per original or match arrow? Arrow is white. Adjust if needed. */
+    font-size: 1.5rem;
+    /* font-weight: bold; */
+    /* Pencil might not need bold */
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.edit-profile-btn:hover {
+    background: var(--primary);
+    color: white;
+}
+
 /* Arrows */
 .avatar-arrow {
     position: absolute;
