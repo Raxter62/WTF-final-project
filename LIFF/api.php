@@ -86,6 +86,14 @@ try {
         $user = getUserByLineId($pdo, $lineUserId);
         if (!$user) throw new Exception("尚未綁定帳號");
 
+        // Append time to ensure Y-m-d 00:00:00 format
+        $dateInput = $input['date'] ?? date('Y-m-d');
+        // Simple check if it already has time or just append 00:00:00
+        if (strlen($dateInput) <= 10) {
+            $date = $dateInput . " 00:00:00";
+        } else {
+            $date = $dateInput;
+        }
         $type = $input['type'] ?? '';
         $minutes = (int)($input['minutes'] ?? 0);
         
@@ -103,8 +111,8 @@ try {
             $calories = round((($met * 3.5 * $weight) / 200) * $minutes);
         }
 
-        $stmt = $pdo->prepare("INSERT INTO workouts (user_id, date, type, minutes, calories) VALUES (?, NOW(), ?, ?, ?)");
-        $stmt->execute([$user['id'], $type, $minutes, $calories]);
+        $stmt = $pdo->prepare("INSERT INTO workouts (user_id, date, type, minutes, calories) VALUES (?, ?, ?, ?, ?)");
+        $stmt->execute([$user['id'], $date, $type, $minutes, $calories]);
 
         // Trigger Achievement Check (Optional: copy/paste logic or include mail.php)
         // Ideally should refactor mail.php logic to be shared, but for now simple insert is consistent with linebot_webhook

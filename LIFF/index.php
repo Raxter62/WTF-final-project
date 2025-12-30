@@ -49,6 +49,13 @@
     <div id="view-workout" class="hidden">
         <div class="card">
             <h2>🏃 新增運動紀錄</h2>
+            
+            <label>日期與時間</label>
+            <div style="display: flex; gap: 10px;">
+                <input type="date" id="work-date" style="flex: 2;">
+                <input type="time" id="work-time" style="flex: 1;">
+            </div>
+
             <label>運動項目</label>
             <select id="work-type">
                 <option value="跑步">跑步</option>
@@ -128,6 +135,20 @@
                         window.location.href = '?path=bind';
                     } else {
                         document.getElementById('view-workout').classList.remove('hidden');
+                        
+                        // Set default date and time
+                        const now = new Date();
+                        
+                        // YYYY-MM-DD
+                        const yyyy = now.getFullYear();
+                        const mm = String(now.getMonth() + 1).padStart(2, '0');
+                        const dd = String(now.getDate()).padStart(2, '0');
+                        document.getElementById('work-date').value = `${yyyy}-${mm}-${dd}`;
+
+                        // HH:MM
+                        const hh = String(now.getHours()).padStart(2, '0');
+                        const min = String(now.getMinutes()).padStart(2, '0');
+                        document.getElementById('work-time').value = `${hh}:${min}`;
                     }
                 } else if (path === 'profile') {
                     if (!status.bound) {
@@ -185,10 +206,17 @@
         }
 
         async function submitWorkout() {
+            const datePart = document.getElementById('work-date').value;
+            const timePart = document.getElementById('work-time').value;
             const type = document.getElementById('work-type').value;
             const minutes = document.getElementById('work-min').value;
             
-            const res = await apiPost('add_workout', { type, minutes });
+            if (!datePart || !timePart) return alert('請完整填寫日期與時間');
+            
+            // Combine to YYYY-MM-DD HH:MM:00
+            const fullDate = `${datePart} ${timePart}:00`;
+
+            const res = await apiPost('add_workout', { date: fullDate, type, minutes });
             if (res.success) {
                 alert(`紀錄已儲存！消耗卡路里: ${res.calories}`);
                 liff.closeWindow();
