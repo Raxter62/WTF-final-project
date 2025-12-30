@@ -4,6 +4,7 @@ const API_URL = 'submit.php';
 let currentUser = null;
 let isDemoMode = false;
 let globalTimeRange = '1d';
+let bindPollInterval = null;
 
 const SPORT_ICONS = {
     '跑步': '🏃', '重訓': '🏋️', '腳踏車': '🚴',
@@ -204,6 +205,7 @@ async function logout() {
     }
 
     // 清除前端狀態
+    if (bindPollInterval) clearInterval(bindPollInterval);
     isDemoMode = false;
     currentUser = null;
 
@@ -1122,7 +1124,6 @@ window.generateBindCode = async function () {
             qrContainer.innerHTML = '';
 
             // 產生新的 QR Code (指向加好友連結)
-            // 假設 Bot ID 是 @063jezzz
             const lineBotUrl = 'https://line.me/R/ti/p/@063jezzz';
             new QRCode(qrContainer, {
                 text: lineBotUrl,
@@ -1131,6 +1132,21 @@ window.generateBindCode = async function () {
             });
 
             alert('綁定碼已產生！請掃描 QR Code 加好友並輸入綁定碼。');
+
+            // === 啟動輪詢檢查綁定狀態 ===
+            if (bindPollInterval) clearInterval(bindPollInterval);
+            console.log('⏳ 開始輪詢綁定狀態...');
+            bindPollInterval = setInterval(checkBindStatus, 3000); // 每 3 秒檢查一次
+
+            // 10分鐘後停止輪詢 (配合後端過期時間)
+            setTimeout(() => {
+                if (bindPollInterval) {
+                    clearInterval(bindPollInterval);
+                    bindPollInterval = null;
+                    console.log('⌛ 輪詢超時，停止檢查');
+                }
+            }, 600000);
+
         } else {
             alert('產生失敗: ' + (json.message || '未知錯誤'));
         }
@@ -1140,8 +1156,40 @@ window.generateBindCode = async function () {
     }
 };
 
+async function checkBindStatus() {
+    try {
+        const res = await fetch(`${API_URL}?action=get_user_info`, { credentials: 'same-origin' });
+        const json = await res.json();
+
+        if (json.success && json.data && json.data.line_user_id) {
+            console.log('✅ 偵測到 LINE 綁定成功！');
+
+            // 停止輪詢
+            clearInterval(bindPollInterval);
+            bindPollInterval = null;
+
+            // 更新使用者資訊
+            currentUser = json.data;
+
+            // 更新 UI (隱藏綁定碼，顯示已綁定)
+            showDashboard();
+
+            // 顯示成功訊息
+            alert('🎉 LINE 綁定成功！');
+        }
+    } catch (e) {
+        console.error('Polling error:', e);
+    }
+}
+
 window.unbindLine = async function () {
-    if (!confirm('確定要解除 LINE 綁定嗎？無法再接收運動提醒。')) return;
+    if (!confirm('確定要解除 LINE 綁定嗎？')) return;
+
+    // 清除任何正在進行的輪詢
+    if (bindPollInterval) {
+        clearInterval(bindPollInterval);
+        bindPollInterval = null;
+    }
 
     console.log('🔗 解除 LINE 綁定...');
     try {
