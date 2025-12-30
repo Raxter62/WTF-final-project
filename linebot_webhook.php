@@ -1,5 +1,5 @@
 <?php
-// linebot_with_buttons.php - 帶按鈕的 LINE Bot
+// linebot_with_datepicker.php - 帶日曆選擇器版本
 
 require_once 'config.php';
 
@@ -17,12 +17,16 @@ if (!isset($events['events'])) {
 }
 
 foreach ($events['events'] as $event) {
+    $replyToken = $event['replyToken'];
+    $lineUserId = $event['source']['userId'];
+    
     if ($event['type'] == 'message' && $event['message']['type'] == 'text') {
         $text = trim($event['message']['text']);
-        $replyToken = $event['replyToken'];
-        $lineUserId = $event['source']['userId'];
-
         handleMessage($text, $replyToken, $lineUserId);
+    }
+    
+    if ($event['type'] == 'postback') {
+        handlePostback($event['postback']['data'], $replyToken, $lineUserId);
     }
 }
 
@@ -32,55 +36,168 @@ http_response_code(200);
 function handleMessage($text, $replyToken, $lineUserId) {
     global $pdo;
     
-    // 綁定帳號（輸入綁定碼）
-    if (preg_match('/^綁定\s*(\d{6})$/', $text, $m)) {
-        $response = bindAccount($lineUserId, $m[1]);
-        replyText($replyToken, $response);
+    // 檢查是否為 4 位數綁定碼
+    if (preg_match('/^\d{4}$/', $text)) {
+        bindAccount($lineUserId, $text, $replyToken);
         return;
     }
     
-    // 綁定帳號（按鈕觸發）
-    if ($text === '綁定帳號' || strpos($text, '如何綁定') !== false) {
-        replyText($replyToken, 
-            "🔗 綁定 FitConnect 帳號\n\n" .
-            "步驟：\n" .
-            "1️⃣ 登入 FitConnect 網站\n" .
-            "2️⃣ 前往「LINE 綁定」頁面\n" .
-            "3️⃣ 點擊「產生綁定碼」\n" .
-            "4️⃣ 回到這裡輸入：\n" .
-            "   綁定 123456\n\n" .
-            "💡 綁定碼有效期限 10 分鐘\n\n" .
-            "輸入任何文字顯示主選單"
-        );
+    // 取得使用者狀態
+    $stmt = $pdo->prepare("
+        SELECT workout_type, workout_duration, edit_mode 
+        FROM users 
+        WHERE line_user_id = ?
+    ");
+    $stmt->execute([$lineUserId]);
+    $user = $stmt->fetch();
+    
+    if (!$user) {
+        showMainMenu($replyToken, $lineUserId);
         return;
     }
     
-    // 查看記錄
-    if (strpos($text, '記錄') !== false || strpos($text, '查看') !== false) {
-        $response = getRecords($lineUserId);
-        replyText($replyToken, $response);
+    // === 運動輸入流程 ===
+    
+    // Step 2: 使用者選完類型，現在輸入時長
+    if (!empty($user['workout_type']) && empty($user['workout_duration'])) {
+        if (preg_match('/^\d+$/', $text)) {
+            $duration = $text;
+            // 儲存時長，顯示日期選擇器
+            $update = $pdo->prepare("
+                UPDATE users 
+                SET workout_duration = ? 
+                WHERE line_user_id = ?
+            ");
+            $update->execute([$duration, $lineUserId]);
+            
+            // 使用日期選擇器
+            showDatePicker($replyToken, $user['workout_type'], $duration, $lineUserId);
+            return;
+        } else {
+            replyText($replyToken, 
+                "❌ 請輸入數字\n\n" .
+                "例如：30（代表 30 分鐘）\n\n" .
+                "或輸入「選單」返回主選單"
+            );
+            return;
+        }
+    }
+    
+    // === 個人資料編輯流程 ===
+    
+    // 編輯姓名
+    if ($user['edit_mode'] == 'name') {
+        saveProfileField($lineUserId, 'display_name', $text, $replyToken);
         return;
     }
     
-    // 排行榜
-    if (strpos($text, '排行') !== false) {
-        $response = getLeaderboard();
-        replyText($replyToken, $response);
-        return;
+    // 編輯身高
+    if ($user['edit_mode'] == 'height') {
+        if (preg_match('/^\d+$/', $text) && $text >= 1 && $text <= 300) {
+            saveProfileField($lineUserId, 'height', $text, $replyToken);
+            return;
+        } else {
+            replyText($replyToken, 
+                "❌ 請輸入 1-300 之間的數字\n\n" .
+                "例如：175\n\n" .
+                "或輸入「選單」返回主選單"
+            );
+            return;
+        }
     }
     
-    // 幫助
-    if (strpos($text, '幫助') !== false || strpos($text, '說明') !== false || $text === '?') {
-        replyWithButtons($replyToken);
-        return;
+    // 編輯體重
+    if ($user['edit_mode'] == 'weight') {
+        if (preg_match('/^\d+$/', $text) && $text >= 1 && $text <= 500) {
+            saveProfileField($lineUserId, 'weight', $text, $replyToken);
+            return;
+        } else {
+            replyText($replyToken, 
+                "❌ 請輸入 1-500 之間的數字\n\n" .
+                "例如：70\n\n" .
+                "或輸入「選單」返回主選單"
+            );
+            return;
+        }
     }
     
-    // 預設：顯示主選單按鈕
-    replyWithMainMenu($replyToken);
+    // 預設：顯示主選單
+    showMainMenu($replyToken, $lineUserId);
 }
 
-// ========== 回覆主選單（按鈕版）==========
-function replyWithMainMenu($replyToken) {
+// ========== 處理 Postback ==========
+function handlePostback($data, $replyToken, $lineUserId) {
+    global $pdo;
+    
+    parse_str($data, $params);
+    $action = $params['action'] ?? '';
+    
+    switch ($action) {
+        case 'add_workout':
+            showWorkoutTypeSelection($replyToken);
+            break;
+            
+        case 'workout_type':
+            $type = $params['type'] ?? '';
+            promptWorkoutDuration($replyToken, $lineUserId, $type);
+            break;
+            
+        case 'workout_date':
+            // 從日期選擇器返回
+            $date = $params['date'] ?? '';
+            saveWorkoutWithDate($lineUserId, $date, $replyToken);
+            break;
+            
+        case 'edit_profile':
+            showProfileEditOptions($replyToken, $lineUserId);
+            break;
+            
+        case 'edit_name':
+            promptNameInput($replyToken, $lineUserId);
+            break;
+            
+        case 'edit_height':
+            promptHeightInput($replyToken, $lineUserId);
+            break;
+            
+        case 'edit_weight':
+            promptWeightInput($replyToken, $lineUserId);
+            break;
+            
+        case 'bind':
+            showBindForm($replyToken, $lineUserId);
+            break;
+            
+        case 'bound_menu':
+            // 已綁定選單
+            showBoundMenu($replyToken, $lineUserId);
+            break;
+            
+        case 'unbind_confirm':
+            // 確認解除綁定
+            showUnbindConfirmation($replyToken);
+            break;
+            
+        case 'unbind_yes':
+            // 執行解除綁定
+            unbindAccount($lineUserId, $replyToken);
+            break;
+            
+        case 'unbind_no':
+            // 取消解除綁定
+            replyText($replyToken, "❌ 已取消解除綁定\n\n輸入「選單」返回主選單");
+            break;
+    }
+}
+
+// ========== 主選單 ==========
+function showMainMenu($replyToken, $lineUserId) {
+    global $pdo;
+    
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE line_user_id = ?");
+    $stmt->execute([$lineUserId]);
+    $isBound = $stmt->fetch() ? true : false;
+    
     $message = [
         "type" => "template",
         "altText" => "FitConnect 主選單",
@@ -90,23 +207,23 @@ function replyWithMainMenu($replyToken) {
             "text" => "請選擇功能",
             "actions" => [
                 [
-                    "type" => "message",
-                    "label" => "🔗 綁定帳號",
-                    "text" => "綁定帳號"
+                    "type" => "postback",
+                    "label" => "📝 輸入運動",
+                    "data" => "action=add_workout"
                 ],
                 [
-                    "type" => "message",
-                    "label" => "📊 查看記錄",
-                    "text" => "記錄"
+                    "type" => "postback",
+                    "label" => "👤 個人資料",
+                    "data" => "action=edit_profile"
                 ],
                 [
-                    "type" => "message",
-                    "label" => "🏆 排行榜",
-                    "text" => "排行"
+                    "type" => "postback",
+                    "label" => $isBound ? "✅ 已綁定" : "🔗 綁定",
+                    "data" => $isBound ? "action=bound_menu" : "action=bind"
                 ],
                 [
                     "type" => "uri",
-                    "label" => "🌐 開啟網站",
+                    "label" => "🌐 跳至網站",
                     "uri" => "https://your-railway-url.railway.app"
                 ]
             ]
@@ -116,51 +233,35 @@ function replyWithMainMenu($replyToken) {
     replyMessage($replyToken, [$message]);
 }
 
-// ========== 回覆幫助（快速回覆按鈕）==========
-function replyWithButtons($replyToken) {
+// ========== A. 選擇運動類型 ==========
+function showWorkoutTypeSelection($replyToken) {
     $message = [
-        "type" => "text",
-        "text" => "📱 FitConnect 使用說明\n\n" .
-                 "🔗 綁定帳號\n" .
-                 "   輸入：綁定 123456\n\n" .
-                 "📊 查看記錄\n" .
-                 "   點擊下方按鈕\n\n" .
-                 "🏆 排行榜\n" .
-                 "   點擊下方按鈕\n\n" .
-                 "選擇功能：",
-        "quickReply" => [
-            "items" => [
+        "type" => "template",
+        "altText" => "選擇運動類型",
+        "template" => [
+            "type" => "buttons",
+            "title" => "📝 輸入運動",
+            "text" => "請選擇運動類型",
+            "actions" => [
                 [
-                    "type" => "action",
-                    "action" => [
-                        "type" => "message",
-                        "label" => "📊 查看記錄",
-                        "text" => "記錄"
-                    ]
+                    "type" => "postback",
+                    "label" => "🏃 跑步",
+                    "data" => "action=workout_type&type=跑步"
                 ],
                 [
-                    "type" => "action",
-                    "action" => [
-                        "type" => "message",
-                        "label" => "🏆 排行榜",
-                        "text" => "排行"
-                    ]
+                    "type" => "postback",
+                    "label" => "🏋️ 重訓",
+                    "data" => "action=workout_type&type=重訓"
                 ],
                 [
-                    "type" => "action",
-                    "action" => [
-                        "type" => "uri",
-                        "label" => "🌐 開啟網站",
-                        "uri" => "https://your-railway-url.railway.app"
-                    ]
+                    "type" => "postback",
+                    "label" => "🚴 腳踏車",
+                    "data" => "action=workout_type&type=腳踏車"
                 ],
                 [
-                    "type" => "action",
-                    "action" => [
-                        "type" => "message",
-                        "label" => "🔗 如何綁定",
-                        "text" => "如何綁定"
-                    ]
+                    "type" => "postback",
+                    "label" => "🏊 游泳",
+                    "data" => "action=workout_type&type=游泳"
                 ]
             ]
         ]
@@ -169,42 +270,108 @@ function replyWithButtons($replyToken) {
     replyMessage($replyToken, [$message]);
 }
 
-// ========== 綁定帳號 ==========
-function bindAccount($lineUserId, $code) {
+// ========== A. 提示輸入時長 ==========
+function promptWorkoutDuration($replyToken, $lineUserId, $type) {
     global $pdo;
     
     $stmt = $pdo->prepare("
-        SELECT id, display_name 
-        FROM users 
-        WHERE line_bind_code = ? 
-        AND line_bind_code_expires_at > NOW()
+        UPDATE users 
+        SET workout_type = ?, workout_duration = NULL 
+        WHERE line_user_id = ?
     ");
-    $stmt->execute([$code]);
-    $user = $stmt->fetch();
-
-    if ($user) {
-        $update = $pdo->prepare("
-            UPDATE users 
-            SET line_user_id = ?, 
-                line_bind_code = NULL, 
-                line_bind_code_expires_at = NULL 
-            WHERE id = ?
-        ");
-        $update->execute([$lineUserId, $user['id']]);
-        
-        return "✅ 綁定成功！\n\n" .
-               "歡迎 {$user['display_name']}！\n" .
-               "現在可以透過 LINE 查看記錄了 💪\n\n" .
-               "輸入任何文字顯示主選單";
-    }
+    $stmt->execute([$type, $lineUserId]);
     
-    return "❌ 綁定碼錯誤或已過期\n\n" .
-           "請到網站重新產生綁定碼\n\n" .
-           "輸入任何文字顯示主選單";
+    replyText($replyToken, 
+        "📝 運動類型：{$type}\n\n" .
+        "請輸入時長（分鐘）：\n\n" .
+        "範例：\n" .
+        "30\n" .
+        "45\n" .
+        "60\n\n" .
+        "💡 直接輸入數字即可"
+    );
 }
 
-// ========== 查看記錄 ==========
-function getRecords($lineUserId) {
+// ========== A. 顯示日期選擇器 ==========
+function showDatePicker($replyToken, $type, $duration, $lineUserId) {
+    $today = date('Y-m-d');
+    $maxDate = date('Y-m-d');
+    $minDate = date('Y-m-d', strtotime('-30 days'));
+    
+    $message = [
+        "type" => "template",
+        "altText" => "選擇日期",
+        "template" => [
+            "type" => "buttons",
+            "title" => "📅 選擇日期",
+            "text" => "運動：{$type}\n時長：{$duration} 分鐘\n\n請選擇運動日期",
+            "actions" => [
+                [
+                    "type" => "datetimepicker",
+                    "label" => "📅 選擇日期",
+                    "data" => "action=workout_date",
+                    "mode" => "date",
+                    "initial" => $today,
+                    "max" => $maxDate,
+                    "min" => $minDate
+                ],
+                [
+                    "type" => "postback",
+                    "label" => "今天",
+                    "data" => "action=workout_date&date={$today}"
+                ],
+                [
+                    "type" => "postback",
+                    "label" => "昨天",
+                    "data" => "action=workout_date&date=" . date('Y-m-d', strtotime('-1 day'))
+                ],
+                [
+                    "type" => "message",
+                    "label" => "取消",
+                    "text" => "選單"
+                ]
+            ]
+        ]
+    ];
+    
+    replyMessage($replyToken, [$message]);
+}
+
+// ========== A. 儲存運動（帶日期） ==========
+function saveWorkoutWithDate($lineUserId, $date, $replyToken) {
+    global $pdo;
+    
+    // 取得暫存的運動類型和時長
+    $stmt = $pdo->prepare("
+        SELECT workout_type, workout_duration 
+        FROM users 
+        WHERE line_user_id = ?
+    ");
+    $stmt->execute([$lineUserId]);
+    $user = $stmt->fetch();
+    
+    if (!$user || !$user['workout_type'] || !$user['workout_duration']) {
+        replyText($replyToken, "❌ 發生錯誤，請重新輸入\n\n輸入「選單」返回主選單");
+        return;
+    }
+    
+    $type = $user['workout_type'];
+    $duration = $user['workout_duration'];
+    
+    // 清除暫存
+    $clear = $pdo->prepare("
+        UPDATE users 
+        SET workout_type = NULL, workout_duration = NULL 
+        WHERE line_user_id = ?
+    ");
+    $clear->execute([$lineUserId]);
+    
+    // 儲存運動
+    saveWorkout($lineUserId, $type, $duration, $date, $replyToken);
+}
+
+// ========== A. 儲存運動 ==========
+function saveWorkout($lineUserId, $type, $duration, $date, $replyToken) {
     global $pdo;
     
     $stmt = $pdo->prepare("SELECT id FROM users WHERE line_user_id = ?");
@@ -212,108 +379,322 @@ function getRecords($lineUserId) {
     $user = $stmt->fetch();
     
     if (!$user) {
-        return "❌ 尚未綁定帳號\n\n" .
-               "請輸入：綁定 123456\n" .
-               "（到網站產生綁定碼）\n\n" .
-               "輸入任何文字顯示主選單";
+        replyText($replyToken, "❌ 請先綁定帳號\n\n輸入「選單」顯示主選單");
+        return;
     }
+    
+    $calories = $duration * 10;
     
     $stmt = $pdo->prepare("
-        SELECT type, minutes, calories, 
-               TO_CHAR(date, 'MM/DD') as date
-        FROM workouts
-        WHERE user_id = ?
-        AND date >= NOW() - INTERVAL '7 days'
-        ORDER BY date DESC
-        LIMIT 5
+        INSERT INTO workouts (user_id, date, type, minutes, calories)
+        VALUES (?, ?, ?, ?, ?)
     ");
-    $stmt->execute([$user['id']]);
-    $records = $stmt->fetchAll();
     
-    if (count($records) === 0) {
-        return "📊 最近 7 天還沒有記錄\n\n" .
-               "快去運動吧！💪\n\n" .
-               "輸入任何文字顯示主選單";
+    try {
+        $stmt->execute([$user['id'], $date, $type, $duration, $calories]);
+        
+        replyText($replyToken, 
+            "✅ 運動記錄已新增！\n\n" .
+            "🏃 {$type}\n" .
+            "⏰ {$duration} 分鐘\n" .
+            "🔥 {$calories} 大卡\n" .
+            "📅 {$date}\n\n" .
+            "輸入「選單」顯示主選單"
+        );
+    } catch (PDOException $e) {
+        replyText($replyToken, "❌ 新增失敗，請稍後再試");
     }
-    
-    $total = $pdo->prepare("
-        SELECT SUM(minutes) as total
-        FROM workouts
-        WHERE user_id = ?
-        AND date >= NOW() - INTERVAL '7 days'
-    ");
-    $total->execute([$user['id']]);
-    $totalMin = $total->fetch()['total'];
-    
-    $msg = "📊 最近 7 天記錄\n\n";
-    $msg .= "總時間：{$totalMin} 分鐘\n\n";
-    
-    $icons = [
-        '跑步' => '🏃',
-        '重訓' => '🏋️',
-        '腳踏車' => '🚴',
-        '游泳' => '🏊',
-        '瑜珈' => '🧘',
-        '其他' => '🤸'
-    ];
-    
-    foreach ($records as $r) {
-        $icon = $icons[$r['type']] ?? '🤸';
-        $msg .= "{$icon} {$r['type']} {$r['minutes']}分\n";
-        $msg .= "   {$r['date']} ({$r['calories']} kcal)\n\n";
-    }
-    
-    $msg .= "輸入任何文字顯示主選單";
-    
-    return $msg;
 }
 
-// ========== 查看排行榜 ==========
-function getLeaderboard() {
+// ========== B. 個人資料選項 ==========
+function showProfileEditOptions($replyToken, $lineUserId) {
     global $pdo;
     
-    $stmt = $pdo->query("
-        SELECT u.display_name, SUM(w.minutes) as total
-        FROM users u
-        JOIN workouts w ON u.id = w.user_id
-        WHERE w.date >= DATE_TRUNC('month', CURRENT_DATE)
-        GROUP BY u.id, u.display_name
-        ORDER BY total DESC
-        LIMIT 5
+    $stmt = $pdo->prepare("
+        SELECT display_name, height, weight 
+        FROM users 
+        WHERE line_user_id = ?
     ");
-    $ranks = $stmt->fetchAll();
+    $stmt->execute([$lineUserId]);
+    $user = $stmt->fetch();
     
-    if (count($ranks) === 0) {
-        return "🏆 本月排行榜\n\n" .
-               "目前還沒有記錄\n\n" .
-               "輸入任何文字顯示主選單";
+    if (!$user) {
+        replyText($replyToken, "❌ 請先綁定帳號");
+        return;
     }
     
-    $msg = "🏆 本月排行榜\n\n";
-    $medals = ['🥇', '🥈', '🥉'];
+    $name = $user['display_name'] ?? '未設定';
+    $height = $user['height'] ? $user['height'] . ' cm' : '未設定';
+    $weight = $user['weight'] ? $user['weight'] . ' kg' : '未設定';
     
-    foreach ($ranks as $i => $r) {
-        $rank = $i < 3 ? $medals[$i] : ($i+1).'.';
-        $msg .= "{$rank} {$r['display_name']} - {$r['total']}分\n";
-    }
-    
-    $msg .= "\n繼續加油！💪\n\n";
-    $msg .= "輸入任何文字顯示主選單";
-    
-    return $msg;
-}
-
-// ========== 回覆文字訊息 ==========
-function replyText($replyToken, $text) {
     $message = [
-        "type" => "text",
-        "text" => $text
+        "type" => "template",
+        "altText" => "個人資料",
+        "template" => [
+            "type" => "buttons",
+            "title" => "👤 個人資料",
+            "text" => "姓名：{$name}\n身高：{$height}\n體重：{$weight}\n\n請選擇要編輯的項目：",
+            "actions" => [
+                [
+                    "type" => "postback",
+                    "label" => "✏️ 編輯姓名",
+                    "data" => "action=edit_name"
+                ],
+                [
+                    "type" => "postback",
+                    "label" => "📏 編輯身高",
+                    "data" => "action=edit_height"
+                ],
+                [
+                    "type" => "postback",
+                    "label" => "⚖️ 編輯體重",
+                    "data" => "action=edit_weight"
+                ],
+                [
+                    "type" => "message",
+                    "label" => "返回主選單",
+                    "text" => "選單"
+                ]
+            ]
+        ]
     ];
     
     replyMessage($replyToken, [$message]);
 }
 
-// ========== 回覆訊息（通用）==========
+// ========== B. 編輯姓名 ==========
+function promptNameInput($replyToken, $lineUserId) {
+    global $pdo;
+    
+    $stmt = $pdo->prepare("UPDATE users SET edit_mode = 'name' WHERE line_user_id = ?");
+    $stmt->execute([$lineUserId]);
+    
+    replyText($replyToken, "✏️ 請輸入新的姓名：\n\n例如：Ray");
+}
+
+// ========== B. 編輯身高 ==========
+function promptHeightInput($replyToken, $lineUserId) {
+    global $pdo;
+    
+    $stmt = $pdo->prepare("UPDATE users SET edit_mode = 'height' WHERE line_user_id = ?");
+    $stmt->execute([$lineUserId]);
+    
+    replyText($replyToken, 
+        "📏 請輸入身高（公分）：\n\n" .
+        "範例：\n" .
+        "175\n" .
+        "160\n" .
+        "180\n\n" .
+        "💡 直接輸入數字即可"
+    );
+}
+
+// ========== B. 編輯體重 ==========
+function promptWeightInput($replyToken, $lineUserId) {
+    global $pdo;
+    
+    $stmt = $pdo->prepare("UPDATE users SET edit_mode = 'weight' WHERE line_user_id = ?");
+    $stmt->execute([$lineUserId]);
+    
+    replyText($replyToken, 
+        "⚖️ 請輸入體重（公斤）：\n\n" .
+        "範例：\n" .
+        "70\n" .
+        "55\n" .
+        "80\n\n" .
+        "💡 直接輸入數字即可"
+    );
+}
+
+// ========== B. 儲存個人資料 ==========
+function saveProfileField($lineUserId, $field, $value, $replyToken) {
+    global $pdo;
+    
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE line_user_id = ?");
+    $stmt->execute([$lineUserId]);
+    $user = $stmt->fetch();
+    
+    if (!$user) {
+        replyText($replyToken, "❌ 請先綁定帳號");
+        return;
+    }
+    
+    $update = $pdo->prepare("UPDATE users SET {$field} = ?, edit_mode = NULL WHERE id = ?");
+    $update->execute([$value, $user['id']]);
+    
+    $fieldNames = [
+        'display_name' => '姓名',
+        'height' => '身高',
+        'weight' => '體重'
+    ];
+    
+    $fieldName = $fieldNames[$field] ?? $field;
+    $unit = ($field == 'height') ? ' cm' : (($field == 'weight') ? ' kg' : '');
+    
+    replyText($replyToken, 
+        "✅ {$fieldName}已更新為 {$value}{$unit}\n\n" .
+        "輸入「選單」顯示主選單"
+    );
+}
+
+// ========== C. 綁定表單 ==========
+function showBindForm($replyToken, $lineUserId) {
+    global $pdo;
+    
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE line_user_id = ?");
+    $stmt->execute([$lineUserId]);
+    
+    if ($stmt->fetch()) {
+        replyText($replyToken, "✅ 您已經綁定過了！");
+        return;
+    }
+    
+    replyText($replyToken, "🔗 請輸入 4 位數綁定碼");
+}
+
+// ========== C. 已綁定選單 ==========
+function showBoundMenu($replyToken, $lineUserId) {
+    global $pdo;
+    
+    // 取得使用者資訊
+    $stmt = $pdo->prepare("
+        SELECT display_name, line_bind_code 
+        FROM users 
+        WHERE line_user_id = ?
+    ");
+    $stmt->execute([$lineUserId]);
+    $user = $stmt->fetch();
+    
+    if (!$user) {
+        replyText($replyToken, "❌ 未綁定");
+        return;
+    }
+    
+    $name = $user['display_name'] ?? '未設定';
+    $code = $user['line_bind_code'] ?? '----';
+    
+    $message = [
+        "type" => "template",
+        "altText" => "綁定資訊",
+        "template" => [
+            "type" => "buttons",
+            "title" => "✅ 已綁定",
+            "text" => "帳號：{$name}\n綁定碼：{$code}\n\n要解除綁定嗎？",
+            "actions" => [
+                [
+                    "type" => "postback",
+                    "label" => "🔓 解除綁定",
+                    "data" => "action=unbind_confirm"
+                ],
+                [
+                    "type" => "message",
+                    "label" => "返回主選單",
+                    "text" => "選單"
+                ]
+            ]
+        ]
+    ];
+    
+    replyMessage($replyToken, [$message]);
+}
+
+// ========== C. 解除綁定確認 ==========
+function showUnbindConfirmation($replyToken) {
+    $message = [
+        "type" => "template",
+        "altText" => "確認解除綁定",
+        "template" => [
+            "type" => "confirm",
+            "text" => "⚠️ 確定要解除綁定嗎？\n\n解除後將無法使用 LINE Bot 功能，但網站資料不會被刪除。\n\n如需重新使用，請再次綁定。",
+            "actions" => [
+                [
+                    "type" => "postback",
+                    "label" => "確定解除",
+                    "data" => "action=unbind_yes"
+                ],
+                [
+                    "type" => "postback",
+                    "label" => "取消",
+                    "data" => "action=unbind_no"
+                ]
+            ]
+        ]
+    ];
+    
+    replyMessage($replyToken, [$message]);
+}
+
+// ========== C. 執行解除綁定 ==========
+function unbindAccount($lineUserId, $replyToken) {
+    global $pdo;
+    
+    // 取得使用者資訊
+    $stmt = $pdo->prepare("
+        SELECT id, display_name 
+        FROM users 
+        WHERE line_user_id = ?
+    ");
+    $stmt->execute([$lineUserId]);
+    $user = $stmt->fetch();
+    
+    if (!$user) {
+        replyText($replyToken, "❌ 未找到綁定資訊");
+        return;
+    }
+    
+    // 清除 LINE User ID
+    $update = $pdo->prepare("
+        UPDATE users 
+        SET line_user_id = NULL 
+        WHERE id = ?
+    ");
+    $update->execute([$user['id']]);
+    
+    replyText($replyToken, 
+        "✅ 解除綁定成功！\n\n" .
+        "您的帳號 {$user['display_name']} 已解除 LINE 綁定。\n\n" .
+        "💡 網站資料仍然保留\n" .
+        "💡 如需再次使用 LINE Bot，請重新綁定\n\n" .
+        "感謝使用 FitConnect！"
+    );
+}
+
+// ========== C. 綁定帳號 ==========
+function bindAccount($lineUserId, $code, $replyToken) {
+    global $pdo;
+    
+    $checkBound = $pdo->prepare("SELECT id FROM users WHERE line_user_id = ?");
+    $checkBound->execute([$lineUserId]);
+    if ($checkBound->fetch()) {
+        replyText($replyToken, "✅ 您已經綁定過了！");
+        return;
+    }
+    
+    $stmt = $pdo->prepare("SELECT id, display_name FROM users WHERE line_bind_code = ?");
+    $stmt->execute([$code]);
+    $user = $stmt->fetch();
+    
+    if ($user) {
+        $update = $pdo->prepare("UPDATE users SET line_user_id = ? WHERE id = ?");
+        $update->execute([$lineUserId, $user['id']]);
+        
+        replyText($replyToken, 
+            "✅ 綁定成功！\n\n" .
+            "歡迎 {$user['display_name']}！\n" .
+            "現在可以使用所有功能了 💪\n\n" .
+            "輸入「選單」顯示主選單"
+        );
+    } else {
+        replyText($replyToken, "❌ 綁定碼錯誤\n\n請確認綁定碼是否正確");
+    }
+}
+
+// ========== 回覆文字訊息 ==========
+function replyText($replyToken, $text) {
+    replyMessage($replyToken, [["type" => "text", "text" => $text]]);
+}
+
+// ========== 回覆訊息 ==========
 function replyMessage($replyToken, $messages) {
     $accessToken = LINE_CHANNEL_TOKEN;
     if (!$accessToken) return;
