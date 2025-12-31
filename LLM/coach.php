@@ -3,11 +3,10 @@
 require_once __DIR__ . '/../config.php';
 
 /**
- * 你可以在 Railway Variables 設：
- * - OPENAI_API_KEY
- * - OPENAI_MODEL (optional, default gpt-4.1-mini)
- * - COACH_REFUSAL_TEXT (optional)
- * - USERS_TABLE / WORKOUTS_TABLE (optional, 不設也會自動猜)
+ * Configuration:
+ * - OPENAI_API_KEY: Set in Railway Variables.
+ * - OPENAI_MODEL: Default 'gpt-4o'.
+ * - COACH_REFUSAL_TEXT: Optional custom refusal message.
  */
 
 function coach_refusal_text(): string {
@@ -15,23 +14,23 @@ function coach_refusal_text(): string {
 }
 
 function openai_model(): string {
-    return getenv('OPENAI_MODEL') ?: 'gpt-4.1-mini';
+    return getenv('OPENAI_MODEL') ?: 'gpt-4o';
 }
 
 /**
- * 本地判斷是否為教練相關（越嚴格越不會亂回）
+ * Determine if the query is related to the coach's domain.
  */
 function is_coach_related(string $text): bool {
     $t = mb_strtolower($text, 'UTF-8');
 
     $keywords = [
-        // 運動/訓練
+        // Sport / Training
         '運動','健身','訓練','跑步','慢跑','衝刺','重訓','重量訓練','深蹲','硬舉','臥推',
         '游泳','腳踏車','自行車','瑜珈','有氧','無氧','核心','拉伸','伸展','恢復',
-        // 熱量/營養/身體數據
+        // Metrics / Nutrition
         '卡路里','熱量','消耗','tdee','bmr','代謝','減脂','增肌','體脂','bmi','體重','身高',
         '蛋白質','碳水','脂肪','飲食','補給','睡眠','休息','心率','配速','步數',
-        // 你的專題語境
+        // Context
         'ai教練','教練','菜單','訓練計畫','運動建議','熱量比例'
     ];
 
@@ -42,193 +41,148 @@ function is_coach_related(string $text): bool {
 }
 
 /**
- * 建立 PDO（優先吃 DATABASE_URL；沒有就吃 PGHOST/PGPORT/...）
- * 你也可以把這段搬去 config.php 做成 get_pdo()，這裡先寫成獨立函式方便你直接用。
+ * Get PDO connection.
+ * Uses global $pdo from config.php if available.
  */
-function get_pdo(): PDO {
-    if (isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) {
-        return $GLOBALS['pdo'];
+function get_coach_pdo(): PDO {
+    global $pdo;
+    if (isset($pdo) && $pdo instanceof PDO) {
+        return $pdo;
     }
 
+    // Fallback: This shouldn't happen if config.php is loaded correctly,
+    // but useful for isolated testing.
     $url = getenv('DATABASE_URL');
     if ($url) {
         $parts = parse_url($url);
-        $host = $parts['host'] ?? 'localhost';
-        $port = $parts['port'] ?? 5432;
-        $user = $parts['user'] ?? '';
-        $pass = $parts['pass'] ?? '';
-        $db   = ltrim($parts['path'] ?? '', '/');
-        $dsn = "pgsql:host={$host};port={$port};dbname={$db};sslmode=require";
-        return new PDO($dsn, $user, $pass, [
+        $dsn = "pgsql:host=" . ($parts['host'] ?? 'localhost') .
+               ";port=" . ($parts['port'] ?? 5432) .
+               ";dbname=" . ltrim($parts['path'] ?? '', '/') .
+               ";sslmode=require";
+        return new PDO($dsn, $parts['user'] ?? '', $parts['pass'] ?? '', [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         ]);
     }
-
-    // Railway Postgres 也會提供這些變數：PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE :contentReference[oaicite:7]{index=7}
-    $host = getenv('PGHOST') ?: 'localhost';
-    $port = getenv('PGPORT') ?: '5432';
-    $user = getenv('PGUSER') ?: '';
-    $pass = getenv('PGPASSWORD') ?: '';
-    $db   = getenv('PGDATABASE') ?: '';
-    $dsn  = "pgsql:host={$host};port={$port};dbname={$db};sslmode=require";
-
-    return new PDO($dsn, $user, $pass, [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-    ]);
+    throw new Exception("Database connection not available.");
 }
 
 function table_exists(PDO $pdo, string $table): bool {
-    $sql = "SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name = :t LIMIT 1";
-    $stmt = $pdo->prepare($sql);
+    $stmt = $pdo->prepare("SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name = :t LIMIT 1");
     $stmt->execute([':t' => $table]);
     return (bool)$stmt->fetchColumn();
 }
 
-function pick_existing_table(PDO $pdo, array $candidates): ?string {
-    foreach ($candidates as $t) {
-        if (table_exists($pdo, $t)) return $t;
-    }
-    return null;
-}
-
 /**
- * 抓使用者資料 + 近期運動紀錄，組成給模型的 context
- * - 會先看 env 指定 USERS_TABLE/WORKOUTS_TABLE
- * - 沒指定則猜常見表名
+ * Build context string for the user.
  */
 function build_user_context(PDO $pdo, int $userId): array {
-    $usersTableEnv   = getenv('USERS_TABLE') ?: '';
-    $workoutsTableEnv= getenv('WORKOUTS_TABLE') ?: '';
+    // 1. Profile
+    $profileText = "（查無此使用者資料）";
+    $stmt = $pdo->prepare("SELECT * FROM users WHERE id = :id LIMIT 1");
+    $stmt->execute([':id' => $userId]);
+    $u = $stmt->fetch();
 
-    $usersTable = $usersTableEnv && table_exists($pdo, $usersTableEnv)
-        ? $usersTableEnv
-        : pick_existing_table($pdo, ['users','user','member','members','accounts','account']);
-
-    $workoutsTable = $workoutsTableEnv && table_exists($pdo, $workoutsTableEnv)
-        ? $workoutsTableEnv
-        : pick_existing_table($pdo, [
-            'exercise_logs','exercise_log','exercise_records','exercise_record',
-            'workouts','workout','records','record'
-        ]);
-
-    $profileText = "（找不到使用者資料表）";
-    if ($usersTable) {
-        // 盡量用常見欄位名：id/name/height/weight/goal
-        $sql = "SELECT * FROM {$usersTable} WHERE id = :id LIMIT 1";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute([':id' => $userId]);
-        $u = $stmt->fetch();
-
-        if ($u) {
-            $name   = $u['name']   ?? $u['username'] ?? $u['display_name'] ?? "User{$userId}";
-            $height = $u['height'] ?? $u['height_cm'] ?? null;
-            $weight = $u['weight'] ?? $u['weight_kg'] ?? null;
-            $goal   = $u['goal']   ?? $u['target'] ?? null;
-
-            $profileText = "使用者：{$name}\n";
-            if ($height !== null) $profileText .= "身高：{$height}\n";
-            if ($weight !== null) $profileText .= "體重：{$weight}\n";
-            if ($goal !== null)   $profileText .= "目標：{$goal}\n";
-        } else {
-            $profileText = "（users 表有，但找不到該使用者 id={$userId}）";
-        }
+    if ($u) {
+        $name   = $u['display_name'] ?? "User{$userId}";
+        $height = $u['height'] ?? '未設定';
+        $weight = $u['weight'] ?? '未設定';
+        
+        $profileText = "使用者：{$name}\n身高：{$height} cm\n體重：{$weight} kg";
     }
 
-    $historyText = "（找不到運動紀錄表）";
-    if ($workoutsTable) {
-        // 嘗試抓近 14 天，最多 30 筆；欄位用常見名稱猜
-        $sql = "SELECT * FROM {$workoutsTable} WHERE user_id = :id OR uid = :id OR id = :id
-                ORDER BY COALESCE(input_time, created_at, time, date, id) DESC
-                LIMIT 30";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute([':id' => $userId]);
-        $rows = $stmt->fetchAll();
+    // 2. Workouts
+    $historyText = "（無近期運動紀錄）";
+    $stmt = $pdo->prepare("
+        SELECT date, type, minutes, calories 
+        FROM workouts 
+        WHERE user_id = :id 
+        ORDER BY date DESC 
+        LIMIT 30
+    ");
+    $stmt->execute([':id' => $userId]);
+    $rows = $stmt->fetchAll();
 
-        if ($rows) {
-            $lines = [];
-            foreach ($rows as $r) {
-                $type = $r['sport'] ?? $r['exercise_type'] ?? $r['type'] ?? $r['category'] ?? '（未知運動）';
-                $min  = $r['duration'] ?? $r['minutes'] ?? $r['time_minutes'] ?? $r['workout_minutes'] ?? null;
-                $kcal = $r['calories'] ?? $r['kcal'] ?? $r['burned_calories'] ?? null;
-                $ts   = $r['input_time'] ?? $r['created_at'] ?? $r['time'] ?? $r['date'] ?? null;
-
-                $line = "- " . ($ts ? "{$ts} " : "") . "{$type}";
-                if ($min !== null) $line .= " / {$min} 分";
-                if ($kcal !== null) $line .= " / {$kcal} kcal";
-                $lines[] = $line;
-            }
-            $historyText = implode("\n", $lines);
-        } else {
-            $historyText = "（運動紀錄表存在，但目前抓不到該使用者的資料）";
+    if ($rows) {
+        $lines = [];
+        foreach ($rows as $r) {
+            $ts   = date('Y-m-d H:i', strtotime($r['date']));
+            $type = $r['type'];
+            $min  = $r['minutes'];
+            $kcal = $r['calories'];
+            $lines[] = "- {$ts} {$type} / {$min}分鐘 / {$kcal}大卡";
         }
+        $historyText = implode("\n", $lines);
     }
 
     return [$profileText, $historyText];
 }
 
 /**
- * 從 Responses API 回傳 output_text
+ * Extract text from OpenAI Chat Completion response.
  */
 function extract_output_text(array $json): ?string {
-    if (!isset($json['output']) || !is_array($json['output'])) return null;
-    foreach ($json['output'] as $item) {
-        if (($item['type'] ?? '') === 'message' && ($item['role'] ?? '') === 'assistant') {
-            foreach (($item['content'] ?? []) as $c) {
-                if (($c['type'] ?? '') === 'output_text' && isset($c['text'])) {
-                    return $c['text'];
-                }
-            }
-        }
+    if (isset($json['choices'][0]['message']['content'])) {
+        return $json['choices'][0]['message']['content'];
     }
     return null;
 }
 
 /**
- * 主要入口：從 DB 抓 context + 限定領域回答
+ * Main Entry Point
  */
 function askCoachFromDb(int $userId, string $userMessage): string {
+    // 1. Domain Check
     if (!is_coach_related($userMessage)) {
         return coach_refusal_text();
     }
 
-    $apiKey = getenv('OPENAI_API_KEY') ?: (defined('OPENAI_API_KEY') ? OPENAI_API_KEY : '');
+    // 2. Check Key
+    $apiKey = defined('OPENAI_API_KEY') ? OPENAI_API_KEY : getenv('OPENAI_API_KEY');
     if (!$apiKey) return "錯誤：未設定 OPENAI_API_KEY。";
 
+    // 3. Build Context
     try {
-        $pdo = get_pdo();
+        $pdo = get_coach_pdo();
         [$profileText, $historyText] = build_user_context($pdo, $userId);
     } catch (Throwable $e) {
-        // DB 掛了也要能回覆（但會少個人化）
-        $profileText = "（DB 連線失敗：{$e->getMessage()}）";
-        $historyText = "（無法取得運動紀錄）";
+        $profileText = "（DB 讀取失敗）";
+        $historyText = "（無法取得紀錄）";
     }
 
-    $instructions =
+    // 4. Prompt Engineering
+    $systemPrompt = 
 "你是一位專屬運動/健康 AI 教練。你只能回答以下範圍：
 - 運動建議、訓練計畫、動作/恢復
 - 熱量消耗、運動消耗比例、營養（蛋白質/碳水/脂肪）、睡眠恢復
 - 與 AI 教練或此平台紀錄/分析相關
+
 如果使用者問題不在以上範圍，你必須只回：".coach_refusal_text()."
 
-【使用者資料】\n{$profileText}\n
-【近期運動紀錄】\n{$historyText}\n
-回答請：1) 先給結論 2) 再給具體建議（條列） 3) 如果缺少資料，問 1~2 個最關鍵的問題。";
+【使用者資料】
+{$profileText}
 
-    $input = [
-        ["role" => "user", "content" => $userMessage]
-    ];
+【近期運動紀錄】
+{$historyText}
 
+回答指引：
+1. 先給結論
+2. 再給具體建議（條列式）
+3. 如果缺少資料，問 1~2 個最關鍵的問題。
+";
+
+    // 5. Call OpenAI API (Chat Completions)
     $payload = [
         "model" => openai_model(),
-        "instructions" => $instructions,
-        "input" => $input,
+        "messages" => [
+            ["role" => "system", "content" => $systemPrompt],
+            ["role" => "user", "content" => $userMessage]
+        ],
         "temperature" => 0.4,
-        "max_output_tokens" => 400
+        "max_tokens" => 500
     ];
 
-    $ch = curl_init("https://api.openai.com/v1/responses");
+    $ch = curl_init("https://api.openai.com/v1/chat/completions");
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_POST => true,
@@ -248,17 +202,13 @@ function askCoachFromDb(int $userId, string $userMessage): string {
     if ($raw === false) return "連線錯誤：{$err}";
 
     $json = json_decode($raw, true);
-    if (!is_array($json)) {
-        // 常見原因：你上游 echo 了 warning/HTML，或反向代理回傳非 JSON
-        return "AI 暫時無法回應（上游回傳非 JSON），請檢查伺服器 log。";
-    }
-
-    // OpenAI 失敗時通常會有 error 欄位
-    if ($http >= 400) {
-        $msg = $json['error']['message'] ?? "HTTP {$http}";
+    
+    // Error Handling
+    if (isset($json['error'])) {
+        $msg = $json['error']['message'] ?? "Unknown Error";
         return "AI 呼叫失敗：{$msg}";
     }
-
+    
     $text = extract_output_text($json);
     return $text ?: "AI 暫時無法回應，請稍後再試。";
 }
