@@ -106,7 +106,11 @@ function build_user_context(PDO $pdo, int $userId): array {
     if ($rows) {
         $lines = [];
         foreach ($rows as $r) {
-            $ts   = date('Y-m-d H:i', strtotime($r['date']));
+            // Force timezone to Asia/Taipei for display
+            $dt = new DateTime($r['date']);
+            $dt->setTimezone(new DateTimeZone('Asia/Taipei'));
+            $ts = $dt->format('Y-m-d H:i');
+            
             $type = $r['type'];
             $min  = $r['minutes'];
             $kcal = $r['calories'];

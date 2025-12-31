@@ -32,6 +32,7 @@ function initApp() {
         generateAvatarGrid();
         setupCoachInteraction();
         setupDateTimeDefaults();
+        setupMobileNav();
 
         console.log('✅ 應用程式設置完成');
     }, 200);
@@ -890,6 +891,56 @@ async function setupCoachInteraction() {
     if (chatWindow) chatWindow.style.display = 'none';
     if (coachContainer) coachContainer.classList.remove('hidden');
 }
+
+function setupMobileNav() {
+    const toggle = document.querySelector('.nav-toggle');
+    const links = document.querySelector('.nav-links');
+
+    if (toggle && links) {
+        // Toggle Menu
+        toggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            links.classList.toggle('active');
+
+            // Animate Hamburger (Optional: simple transform)
+            const spans = toggle.querySelectorAll('span');
+            if (links.classList.contains('active')) {
+                spans[0].style.transform = 'rotate(45deg) translate(5px, 5px)';
+                spans[1].style.opacity = '0';
+                spans[2].style.transform = 'rotate(-45deg) translate(7px, -6px)';
+            } else {
+                spans[0].style.transform = 'none';
+                spans[1].style.opacity = '1';
+                spans[2].style.transform = 'none';
+            }
+        });
+
+        // Close when clicking outside
+        document.addEventListener('click', (e) => {
+            if (links.classList.contains('active') && !links.contains(e.target) && !toggle.contains(e.target)) {
+                links.classList.remove('active');
+                // Reset hamburger
+                const spans = toggle.querySelectorAll('span');
+                spans[0].style.transform = 'none';
+                spans[1].style.opacity = '1';
+                spans[2].style.transform = 'none';
+            }
+        });
+
+        // Close when clicking a link
+        links.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', () => {
+                links.classList.remove('active');
+                // Reset hamburger
+                const spans = toggle.querySelectorAll('span');
+                spans[0].style.transform = 'none';
+                spans[1].style.opacity = '1';
+                spans[2].style.transform = 'none';
+            });
+        });
+    }
+}
+
 
 // 卡路里計算
 window.calculateCalories = function () {
