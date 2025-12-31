@@ -20,6 +20,33 @@ if (document.readyState === 'loading') {
     initApp();
 }
 
+// ✅ Service Worker register
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js')
+            .then((reg) => {
+                console.log('SW registered!', reg);
+
+                // （可選）如果有新版在 waiting，請它立刻接管
+                if (reg.waiting) {
+                    reg.waiting.postMessage('SKIP_WAITING');
+                }
+
+                // （可選）監聽更新：一旦有新 SW 安裝好，就請它 skipWaiting
+                reg.addEventListener('updatefound', () => {
+                    const newWorker = reg.installing;
+                    if (!newWorker) return;
+                    newWorker.addEventListener('statechange', () => {
+                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            newWorker.postMessage('SKIP_WAITING');
+                        }
+                    });
+                });
+            })
+            .catch((err) => console.log('SW failed!', err));
+    });
+}
+
 function initApp() {
     console.log('✅ FitConnect 初始化開始...');
 
@@ -27,7 +54,8 @@ function initApp() {
     setTimeout(() => {
         console.log('🔧 開始設置應用程式...');
 
-        checkLogin();
+        // checkLogin(); // Auto-login disabled by user request
+        showLogin(); // Force login screen by default
         setupForms();
         generateAvatarGrid();
         setupCoachInteraction();
@@ -1331,3 +1359,37 @@ window.unbindLine = async function () {
 };
 
 console.log('✅ main.js 載入完成');
+// --- AI Coach Toggle Logic ---
+function toggleAICoach(e) {
+    if (e) e.preventDefault();
+
+    const coachContainer = document.getElementById('ai-coach-container');
+    const toggleBtn = document.getElementById('nav-coach-toggle');
+    const chatWindow = document.getElementById('chat-window');
+
+    if (!coachContainer || !toggleBtn) return;
+
+    if (coachContainer.style.display === 'none') {
+        // Show
+        coachContainer.style.display = 'block';
+        toggleBtn.textContent = 'AI教練: ON';
+        // Restore chat window visibility logic if needed, but for now just toggle coach
+    } else {
+        // Hide
+        coachContainer.style.display = 'none';
+        toggleBtn.textContent = 'AI教練: OFF';
+        // Also hide chat window if coach is hidden? 
+        // User asked "Show/Hide AI Coach", implied the avatar. 
+        // If chat is open, maybe keep it? Or hide it too? 
+        // Let's hide chat too to be safe, as it is related.
+        if (chatWindow) chatWindow.style.display = 'none';
+    }
+
+    // Auto-close menu on mobile (matches other links)
+    const navLinks = document.querySelector('.nav-links');
+    const navToggle = document.querySelector('.nav-toggle');
+    if (navLinks && navLinks.classList.contains('active')) {
+        navLinks.classList.remove('active');
+        navToggle.classList.remove('active');
+    }
+}

@@ -11,6 +11,7 @@
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <link rel="stylesheet" href="public/css/style.css">
 
+
 </head>
 
 <body>
@@ -91,6 +92,7 @@
                     <a href="#section-charts">分析</a>
                     <a href="#section-leaderboard">排行榜</a>
                     <a href="#line-bind-section">綁定</a>
+                    <a href="#" id="nav-coach-toggle" onclick="toggleAICoach(event)">AI教練: ON</a>
                     <a href="#" onclick="logout()">登出</a>
                 </div>
             </div>
@@ -294,7 +296,7 @@
                                     style="width: 100%; margin-bottom: 1rem;">
                                     產生綁定碼
                                 </button>
-                                <div
+                                <div class="usage-box"
                                     style="background: rgba(197, 248, 176, 0.1); padding: 1.5rem; border-radius: 12px; border-left: 4px solid #00B900;">
                                     <p style="color: #333; font-size: 0.95rem; margin: 0; line-height: 1.6;">
                                         <strong style="color: #00B900;">📌 使用方式：</strong><br>
@@ -365,63 +367,11 @@
         </div>
 
 
-
-
-        <!-- Scripts -->
-
-        <!-- 🛡️ 禁用自動登入（必須在 main.js 之前）-->
-        <script>
-            (function () {
-                console.log('🛡️ 禁用自動登入系統啟動');
-
-                // ===== 1. 先定義 checkLogin，防止 main.js 執行時找不到 =====
-                window.checkLogin = function () {
-                    console.log('⛔ checkLogin 已被覆蓋 - 不執行自動登入');
-
-                    // 強制顯示登入頁面
-                    const authView = document.getElementById('auth-view');
-                    const dashboardView = document.getElementById('dashboard-view');
-                    const coachContainer = document.getElementById('ai-coach-container');
-
-                    if (authView) {
-                        authView.classList.remove('hidden');
-                        authView.style.display = 'block';
-                    }
-                    if (dashboardView) {
-                        dashboardView.classList.add('hidden');
-                        dashboardView.style.display = 'none';
-                    }
-                    if (coachContainer) {
-                        coachContainer.classList.add('hidden');
-                        coachContainer.style.display = 'none';
-                    }
-
-                    console.log('✅ 強制顯示登入頁面');
-                };
-
-                // ===== 2. 立即執行一次，確保初始狀態 =====
-                document.addEventListener('DOMContentLoaded', function () {
-                    console.log('📍 DOM 載入完成，執行 checkLogin');
-                    window.checkLogin();
-                });
-
-                console.log('✅ 自動登入已禁用（已覆蓋 checkLogin）');
-            })();
-        </script>
-
-        <!-- QRCodeJS -->
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
         <script src="public/js/main.js"></script>
 
         <script src="public/js/bg-effects.js"></script>
         <script src="public/js/ai_chat.js"></script>
-        <script>
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('./service-worker.js')
-                    .then(reg => console.log('SW registered!', reg))
-                    .catch(err => console.log('SW failed!', err))
-            }
-        </script>
+
 </body>
 
 </html>
