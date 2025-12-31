@@ -6,6 +6,47 @@ let isDemoMode = false;
 let globalTimeRange = '1d';
 let bindPollInterval = null;
 let leaderboardPollInterval = null; // 排行榜即時更新 Timer
+let deferredPrompt = null; // PWA Install Prompt
+
+// === PWA Install Logic ===
+window.addEventListener('beforeinstallprompt', (e) => {
+    // Prevent the mini-infobar from appearing on mobile
+    e.preventDefault();
+    // Stash the event so it can be triggered later.
+    deferredPrompt = e;
+    console.log('📲 PWA 可安裝事件觸發');
+
+    // Update UI notify the user they can install the PWA
+    const installBtn = document.getElementById('pwa-install-btn');
+    if (installBtn) {
+        installBtn.style.display = 'block';
+    }
+});
+
+window.addEventListener('appinstalled', () => {
+    console.log('✅ PWA 已安裝');
+    deferredPrompt = null;
+    const installBtn = document.getElementById('pwa-install-btn');
+    if (installBtn) installBtn.style.display = 'none';
+});
+
+async function triggerInstall() {
+    if (!deferredPrompt) return;
+
+    // Show the install prompt
+    deferredPrompt.prompt();
+
+    // Wait for the user to respond to the prompt
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log(`PWA 安裝選擇結果: ${outcome}`);
+
+    // We've used the prompt, and can't use it again, throw it away
+    deferredPrompt = null;
+
+    // Hide button immediately after click (optional, depending on UX preference)
+    // const installBtn = document.getElementById('pwa-install-btn');
+    // if (installBtn) installBtn.style.display = 'none';
+}
 
 const SPORT_ICONS = {
     '跑步': '🏃', '重訓': '🏋️', '腳踏車': '🚴',
