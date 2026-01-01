@@ -10,7 +10,7 @@ require_once __DIR__ . '/../config.php';
  */
 
 function coach_refusal_text(): string {
-    return getenv('COACH_REFUSAL_TEXT') ?: '這個問題和運動無關，我沒辦法回答喔。';
+    return getenv('COACH_REFUSAL_TEXT') ?: '這個問題和運動無關，我沒辦法回答喔，我可以給您運動建議、訓練計畫、動作/恢復、熱量消耗、運動消耗比例、營養建議、睡眠恢復等相關的問題';
 }
 
 function openai_model(): string {
