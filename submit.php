@@ -418,13 +418,19 @@ try {
             $dateCondition = "DATE(w.date) >= date_trunc('month', CURRENT_DATE - INTERVAL '2 months')";
         }
 
-        // Fetch ALL users to calculate rank (Simple approach for consistency)
+        // Fetch ALL users rank based on user_totals (All Time Accumulation)
+        // This solves the issue of Leaderboard resetting or dropping data when the date range (e.g. year) changes.
+        // User explicitly requested "Total" to prevent data deletion perception.
+        
+        $limitCondition = ""; 
+        // If we really want to support ranges for Leaderboard, we can keep the old logic for specific ranges,
+        // but given the user report, "Total" seems to be what matters most.
+        // Let's use user_totals for the main score.
+        
         $stmt = $pdo->prepare(
-            "SELECT u.id, u.display_name, SUM(w.calories) as total 
+            "SELECT u.id, u.display_name, t.total_calories as total, u.avatar_id
              FROM users u 
-             JOIN workouts w ON u.id = w.user_id 
-             WHERE $dateCondition
-             GROUP BY u.id 
+             JOIN user_totals t ON u.id = t.user_id 
              ORDER BY total DESC"
         );
         $stmt->execute();

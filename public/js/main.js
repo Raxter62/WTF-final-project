@@ -525,6 +525,10 @@ async function handleAddWorkout(e) {
             }
 
             form.reset();
+            // Fix: Explicitly reset the calculated value display to 0
+            const calcVal = document.getElementById('calc-val');
+            if (calcVal) calcVal.textContent = '0';
+
             document.getElementById('calorie-display-area').classList.add('hidden');
             setupDateTimeDefaults();
             setGlobalRange(globalTimeRange);
