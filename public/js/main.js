@@ -245,8 +245,8 @@ function showDashboard() {
 
     setGlobalRange('1d');
 
-    // Start Leaderboard Polling
-    startLeaderboardPolling();
+    // Start Auto Refresh (Profile, Stats, Leaderboard)
+    startAutoRefresh();
 
     // Reset and Update LINE Binding UI
     const notBoundEl = document.getElementById('not-bound');
@@ -287,7 +287,8 @@ async function logout() {
 
     // 清除前端狀態
     if (bindPollInterval) clearInterval(bindPollInterval);
-    stopLeaderboardPolling();
+    if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+    // stopLeaderboardPolling(); // Deprecated
     isDemoMode = false;
     currentUser = null;
 
@@ -1211,28 +1212,6 @@ async function saveProfile() {
         }
     } catch (err) {
         console.error('❌ 儲存錯誤:', err);
-    }
-}
-
-// 更新個人資料 UI (顯示身高體重)
-function updateProfileUI() {
-    if (!currentUser) return;
-
-    const nameEl = document.getElementById('user-display-name');
-    const heightEl = document.getElementById('user-height');
-    const weightEl = document.getElementById('user-weight');
-
-    if (nameEl) nameEl.textContent = currentUser.display_name;
-
-    // Format to 1 decimal place if value exists
-    if (heightEl) {
-        const h = parseFloat(currentUser.height);
-        heightEl.textContent = (!isNaN(h) && h > 0) ? h.toFixed(1) : '未設定';
-    }
-
-    if (weightEl) {
-        const w = parseFloat(currentUser.weight);
-        weightEl.textContent = (!isNaN(w) && w > 0) ? w.toFixed(1) : '未設定';
     }
 }
 
