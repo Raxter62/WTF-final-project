@@ -1214,6 +1214,20 @@ async function saveProfile() {
     }
 }
 
+// 更新個人資料 UI (顯示身高體重)
+function updateProfileUI() {
+    if (!currentUser) return;
+
+    const nameEl = document.getElementById('user-display-name');
+    const heightEl = document.getElementById('user-height');
+    const weightEl = document.getElementById('user-weight');
+
+    if (nameEl) nameEl.textContent = currentUser.display_name;
+    if (heightEl) heightEl.textContent = currentUser.height > 0 ? currentUser.height : '未設定';
+    if (weightEl) weightEl.textContent = currentUser.weight > 0 ? currentUser.weight : '未設定';
+}
+
+
 function generateAvatarGrid() {
     // 頭像選擇
 }
