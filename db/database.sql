@@ -36,7 +36,6 @@ CREATE TABLE IF NOT EXISTS leaderboard_snapshots (
     date DATE NOT NULL,
     user_id INTEGER NOT NULL,
     rank INTEGER NOT NULL,
-    total_minutes INTEGER NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );

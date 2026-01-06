@@ -93,18 +93,11 @@
     <script>
         const API_URL = 'api.php';
         let lineUserId = '';
-        let liffId = ''; // Config in config.php needed? No, usually hardcoded or passed from PHP.
-        // We need to fetch LIFF_ID from server or assume it's set in init.
-        // Better: let PHP print it into JS variable.
+        let liffId = ''; 
         
         async function init() {
             try {
-                // Get LIFF ID from server-side render or simple fetch?
-                // Simplest: PHP echo it. But this file is php? Yes.
-                /* 
-                   Wait, this is a .php file in my plan? 
-                   If I write it as index.php, I can inject LIFF_ID.
-                */
+                //自動取得用戶line id
                 await liff.init({ liffId: "<?php require_once '../config.php'; echo LIFF_ID; ?>" });
                 
                 if (!liff.isLoggedIn()) {

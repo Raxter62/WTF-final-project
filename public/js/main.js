@@ -1306,7 +1306,7 @@ window.generateBindCode = async function () {
             qrContainer.innerHTML = '';
 
             // 產生新的 QR Code (指向加好友連結)
-            const lineBotUrl = 'https://line.me/R/ti/p/@063jezzz';
+            const lineBotUrl = 'https://line.me/R/ti/p/@063jezzz';//line id
             new QRCode(qrContainer, {
                 text: lineBotUrl,
                 width: 128,

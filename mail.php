@@ -189,20 +189,11 @@ function logLeaderboardSnapshot(PDO $pdo): void {
     $stmt->execute([$today]);
     if ($stmt->fetch()) return; // Already logged
 
-    // Calculate Ranks (Top 50 is enough for snapshot)
-    // Rank by Month (Standard) or All Time? User didn't specify, standard leaderboard is usually Monthly or All Time.
-    // Let's stick to "Current Rank" as seen in the main leaderboard which defaults to 1m (Monthly).
-    // But to be effective for history, maybe Monthly context makes sense.
-    // However, the "Surpassed" feature implies a global or consistent ranking.
-    // Let's use 30-day (Monthly) rolling as the metric for snapshot.
-    
-    $dateCondition = "DATE(w.date) >= CURRENT_DATE - INTERVAL '30 days'";
+    // Use user_totals (All Time) as the metric for snapshot
     $sql = "
-        SELECT u.id, SUM(w.calories) as total_cal
+        SELECT u.id, t.total_calories as total_cal
         FROM users u 
-        JOIN workouts w ON u.id = w.user_id 
-        WHERE $dateCondition
-        GROUP BY u.id 
+        JOIN user_totals t ON u.id = t.user_id 
         ORDER BY total_cal DESC
     ";
     
@@ -213,13 +204,10 @@ function logLeaderboardSnapshot(PDO $pdo): void {
     $rank = 1;
     $pdo->beginTransaction();
     try {
-        $insert = $pdo->prepare("INSERT INTO leaderboard_snapshots (date, user_id, rank, total_minutes) VALUES (?, ?, ?, ?)");
+        // Removed total_minutes column
+        $insert = $pdo->prepare("INSERT INTO leaderboard_snapshots (date, user_id, rank) VALUES (?, ?, ?)");
         foreach ($rows as $r) {
-            // Mapping total_minutes to total_cal just for storage (since table has total_minutes col)
-            // Or we assume the table should have total_calories.
-            // I will store total_cal in total_minutes col to matchschema OR assume I fixed schema.
-            // Let's stick to storage.
-            $insert->execute([$today, $r['id'], $rank++, $r['total_cal']]);
+            $insert->execute([$today, $r['id'], $rank++]);
         }
         $pdo->commit();
     } catch (Exception $e) {
@@ -233,14 +221,11 @@ function logLeaderboardSnapshot(PDO $pdo): void {
  * Passed in $preUpdateRanks (Map: userId -> rank)
  */
 function checkLeaderboardChanges(PDO $pdo, array $preUpdateRanks): void {
-    // Calculate New Ranks
-    $dateCondition = "DATE(w.date) >= CURRENT_DATE - INTERVAL '30 days'";
+    // Calculate New Ranks (All Time)
     $sql = "
-        SELECT u.id, SUM(w.calories) as total_cal
+        SELECT u.id, t.total_calories as total_cal
         FROM users u 
-        JOIN workouts w ON u.id = w.user_id 
-        WHERE $dateCondition
-        GROUP BY u.id 
+        JOIN user_totals t ON u.id = t.user_id 
         ORDER BY total_cal DESC
     ";
     $stmt = $pdo->prepare($sql);
@@ -282,13 +267,10 @@ function checkLeaderboardChanges(PDO $pdo, array $preUpdateRanks): void {
  * Helper to get current ranks for comparison
  */
 function getCurrentRanks(PDO $pdo): array {
-    $dateCondition = "DATE(w.date) >= CURRENT_DATE - INTERVAL '30 days'";
     $sql = "
-        SELECT u.id, SUM(w.calories) as total_cal
+        SELECT u.id, t.total_calories as total_cal
         FROM users u 
-        JOIN workouts w ON u.id = w.user_id 
-        WHERE $dateCondition
-        GROUP BY u.id 
+        JOIN user_totals t ON u.id = t.user_id 
         ORDER BY total_cal DESC
     ";
     $stmt = $pdo->prepare($sql);

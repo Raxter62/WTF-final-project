@@ -1,5 +1,5 @@
 <?php
-// config.php - 資料庫連線與全域設定（Supabase/Neon/Railway 強化版）
+// config.php - 資料庫連線與全域設定
 declare(strict_types=1);
 
 ini_set('display_errors', '0');
@@ -102,7 +102,7 @@ try {
     fc_json_fatal('DB connection failed', $e->getMessage());
 }
 
-// ---- 5) 建表（不刪原功能）----
+// ---- 5) 建表----
 try {
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS users (
@@ -144,7 +144,6 @@ try {
             date DATE NOT NULL,
             user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             rank INTEGER NOT NULL,
-            total_minutes INTEGER NOT NULL,
             created_at TIMESTAMPTZ DEFAULT NOW()
         );
     ");
