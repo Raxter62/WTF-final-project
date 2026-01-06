@@ -1452,7 +1452,7 @@ let autoRefreshInterval = null;
 
 function startAutoRefresh() {
     if (autoRefreshInterval) clearInterval(autoRefreshInterval);
-    console.log('🔄 啟動自動更新 (每 10 秒)...');
+    console.log('🔄 啟動自動更新 (每 30 秒)...');
 
     autoRefreshInterval = setInterval(async () => {
         // Only refresh if user is logged in (currentUser exists)
@@ -1482,7 +1482,7 @@ function startAutoRefresh() {
             loadLeaderboard();
         } catch (e) { console.error('Auto-refresh Leaderboard Error', e); }
 
-    }, 10000); // 10 seconds
+    }, 30000); // 30 seconds
 }
 
 // Start on load (initApp will handle login check, but we can call it here too)
