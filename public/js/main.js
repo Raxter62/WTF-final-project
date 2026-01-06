@@ -116,14 +116,21 @@ async function checkLogin() {
     console.log('🔍 檢查登入狀態...');
     try {
         const res = await fetch(`${API_URL}?action=get_user_info`, { credentials: 'same-origin' });
+        // Check for non-OK HTTP status before parsing JSON
+        if (!res.ok) {
+            console.log(`ℹ️ 未登入 (HTTP Status: ${res.status})`);
+            showLogin();
+            return; // Exit early if response is not OK
+        }
         const json = await res.json();
 
         if (json.success && json.data) {
-            console.log('✅ 已登入:', json.data.display_name);
+            console.log('✅ 已登入:', json.data);
             currentUser = json.data;
             showDashboard();
+            if (window.startAutoRefresh) window.startAutoRefresh(); // Start polling
         } else {
-            console.log('ℹ️ 未登入，顯示登入頁面');
+            console.log('ℹ️ 未登入');
             showLogin();
         }
     } catch (e) {
@@ -1438,3 +1445,54 @@ function toggleAICoach(e) {
         navToggle.classList.remove('active');
     }
 }
+// --- Auto Refresh Logic ---
+let autoRefreshInterval = null;
+
+function startAutoRefresh() {
+    if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+    console.log('🔄 啟動自動更新 (每 10 秒)...');
+
+    autoRefreshInterval = setInterval(async () => {
+        // Only refresh if user is logged in (currentUser exists)
+        if (!currentUser) return;
+
+        // 1. Refresh User Info (Profile weights/height changes)
+        // We use a separate silent fetch to avoid alerts
+        try {
+            const res = await fetch(`${API_URL}?action=get_user_info`, { credentials: 'same-origin' });
+            const json = await res.json();
+            if (json.success && json.data) {
+                const oldWeight = currentUser.weight;
+                const oldHeight = currentUser.height;
+                currentUser = json.data;
+
+                // If weight/height changed, update UI
+                if (oldWeight !== currentUser.weight || oldHeight !== currentUser.height) {
+                    console.log('🔄 偵測到個人資料更新');
+                    updateProfileUI(); // Ensure this function exists or reuse showDashboard logic
+                }
+            }
+        } catch (e) { console.error('Auto-refresh User Error', e); }
+
+        // 2. Refresh Stats (Charts)
+        // Use globalTimeRange
+        try {
+            fetchStats(globalTimeRange || '1d');
+        } catch (e) { console.error('Auto-refresh Stats Error', e); }
+
+        // 3. Refresh Leaderboard
+        try {
+            loadLeaderboard();
+        } catch (e) { console.error('Auto-refresh Leaderboard Error', e); }
+
+    }, 10000); // 10 seconds
+}
+
+// Start on load (initApp will handle login check, but we can call it here too)
+// Better to call it after successful login in showDashboard or initApp
+// Let's attach it to window for now and call it inside initApp if logged in.
+window.startAutoRefresh = startAutoRefresh;
+
+// Call it in initApp if logged in
+const originalInit = window.onload; // Or just add to existing initApp
+

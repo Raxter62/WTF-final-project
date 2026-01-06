@@ -114,8 +114,29 @@ try {
         $stmt = $pdo->prepare("INSERT INTO workouts (user_id, date, type, minutes, calories) VALUES (?, ?, ?, ?, ?)");
         $stmt->execute([$user['id'], $date, $type, $minutes, $calories]);
 
-        // Trigger Achievement Check (Optional: copy/paste logic or include mail.php)
-        // Ideally should refactor mail.php logic to be shared, but for now simple insert is consistent with linebot_webhook
+
+        // Update User Totals (Postgres UPSERT)
+        $stmt = $pdo->prepare(
+            'INSERT INTO user_totals (user_id, total_calories) VALUES (:uid, :cal) 
+             ON CONFLICT (user_id) DO UPDATE SET total_calories = user_totals.total_calories + :cal'
+        );
+        $stmt->execute([':uid' => $user['id'], ':cal' => $calories]);
+
+        // Gamification Checks
+        // Require mail.php if not already (it is require_once logic, but paths might differ locally)
+        // Since api.php is in LIFF/, mail.php is in ../mail.php
+        if (file_exists(__DIR__ . '/../mail.php')) {
+            require_once __DIR__ . '/../mail.php';
+            if (function_exists('checkAchievements')) {
+                // Get pre-ranks if we want rank change notification? 
+                // Too complex for now? Let's just do achievements.
+                checkAchievements($pdo, $user['id']);
+            }
+            // Trigger Leaderboard Snapshot check? Maybe overkill for every request, but acceptable.
+            if (function_exists('logLeaderboardSnapshot')) {
+                logLeaderboardSnapshot($pdo);
+            }
+        }
         
         echo json_encode(['success' => true, 'message' => '紀錄已新增', 'calories' => $calories]);
     }
