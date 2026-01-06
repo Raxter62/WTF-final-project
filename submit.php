@@ -132,8 +132,8 @@ try {
         }
         
         $name = trim($input['display_name'] ?? '');
-        $height = intval($input['height'] ?? 0);
-        $weight = intval($input['weight'] ?? 0);
+        $height = round((float)($input['height'] ?? 0), 1);
+        $weight = round((float)($input['weight'] ?? 0), 1);
         
         $stmt = $pdo->prepare(
             'UPDATE users SET display_name = :name, height = :height, weight = :weight WHERE id = :id'
