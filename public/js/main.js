@@ -945,22 +945,25 @@ async function fetchPost(action, data = {}) {
 }
 
 function updateProfileUI() {
-    // 更新身高體重顯示
+    // 更新身高體重與名字顯示
     if (!currentUser) return;
 
+    // 1. Update Name
+    const nameEl = document.getElementById('user-display-name');
+    if (nameEl) {
+        nameEl.textContent = currentUser.display_name;
+    }
+
+    // 2. Update Height/Weight (Raw value from DB, 1 decimal)
     const heightEl = document.getElementById('user-height');
     const weightEl = document.getElementById('user-weight');
 
-    if (heightEl && currentUser.height) {
-        heightEl.textContent = Math.round(currentUser.height) + ' cm';
-    } else if (heightEl) {
-        heightEl.textContent = '未設定';
+    if (heightEl) {
+        heightEl.textContent = (currentUser.height && currentUser.height > 0) ? currentUser.height + ' cm' : '未設定';
     }
 
-    if (weightEl && currentUser.weight) {
-        weightEl.textContent = Math.round(currentUser.weight) + ' kg';
-    } else if (weightEl) {
-        weightEl.textContent = '未設定';
+    if (weightEl) {
+        weightEl.textContent = (currentUser.weight && currentUser.weight > 0) ? currentUser.weight + ' kg' : '未設定';
     }
 }
 
