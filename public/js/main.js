@@ -145,7 +145,7 @@ async function loadLeaderboard() {
 
     try {
         const range = globalTimeRange || '1m';
-        const res = await fetch(`${API_URL}?action=get_leaderboard&range=${range}`, { credentials: 'same-origin' });
+        const res = await fetch(`${API_URL}?action=get_leaderboard&range=${range}&t=${Date.now()}`, { credentials: 'same-origin' });
         const json = await res.json();
 
         if (json.success) {
@@ -572,7 +572,7 @@ async function fetchStats(range) {
     try {
         const json = isDemoMode
             ? getDemoStats(range)
-            : await (await fetch(`${API_URL}?action=get_stats&range=${range}`, { credentials: 'same-origin' })).json();
+            : await (await fetch(`${API_URL}?action=get_stats&range=${range}&t=${Date.now()}`, { credentials: 'same-origin' })).json();
 
         if (!json.success) {
             console.error('Stats failed:', json.message);
@@ -1461,7 +1461,7 @@ function startAutoRefresh() {
         // 1. Refresh User Info (Profile weights/height changes)
         // We use a separate silent fetch to avoid alerts
         try {
-            const res = await fetch(`${API_URL}?action=get_user_info`, { credentials: 'same-origin' });
+            const res = await fetch(`${API_URL}?action=get_user_info&t=${Date.now()}`, { credentials: 'same-origin' });
             const json = await res.json();
             if (json.success && json.data) {
                 // Always update currentUser and UI to ensure sync
