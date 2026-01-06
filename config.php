@@ -113,8 +113,8 @@ try {
             line_user_id TEXT,
             line_bind_code VARCHAR(10),
             line_bind_code_expires_at TIMESTAMPTZ,
-            height NUMERIC(5,2),
-            weight NUMERIC(5,2),
+            height NUMERIC(5,1),
+            weight NUMERIC(5,1),
             created_at TIMESTAMPTZ DEFAULT NOW()
         );
     ");

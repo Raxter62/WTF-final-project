@@ -1223,8 +1223,17 @@ function updateProfileUI() {
     const weightEl = document.getElementById('user-weight');
 
     if (nameEl) nameEl.textContent = currentUser.display_name;
-    if (heightEl) heightEl.textContent = currentUser.height > 0 ? currentUser.height : '未設定';
-    if (weightEl) weightEl.textContent = currentUser.weight > 0 ? currentUser.weight : '未設定';
+
+    // Format to 1 decimal place if value exists
+    if (heightEl) {
+        const h = parseFloat(currentUser.height);
+        heightEl.textContent = (!isNaN(h) && h > 0) ? h.toFixed(1) : '未設定';
+    }
+
+    if (weightEl) {
+        const w = parseFloat(currentUser.weight);
+        weightEl.textContent = (!isNaN(w) && w > 0) ? w.toFixed(1) : '未設定';
+    }
 }
 
 
@@ -1476,15 +1485,10 @@ function startAutoRefresh() {
             const res = await fetch(`${API_URL}?action=get_user_info`, { credentials: 'same-origin' });
             const json = await res.json();
             if (json.success && json.data) {
-                const oldWeight = currentUser.weight;
-                const oldHeight = currentUser.height;
+                // Always update currentUser and UI to ensure sync
                 currentUser = json.data;
-
-                // If weight/height changed, update UI
-                if (oldWeight !== currentUser.weight || oldHeight !== currentUser.height) {
-                    console.log('🔄 偵測到個人資料更新');
-                    updateProfileUI(); // Ensure this function exists or reuse showDashboard logic
-                }
+                console.log('🔄 同步個人資料', currentUser);
+                updateProfileUI();
             }
         } catch (e) { console.error('Auto-refresh User Error', e); }
 

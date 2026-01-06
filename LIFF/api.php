@@ -146,8 +146,8 @@ try {
         if (!$user) throw new Exception("尚未綁定帳號");
 
         $name = $input['display_name'] ?? $user['display_name'];
-        $height = (float)($input['height'] ?? $user['height']);
-        $weight = (float)($input['weight'] ?? $user['weight']);
+        $height = round((float)($input['height'] ?? $user['height']), 1);
+        $weight = round((float)($input['weight'] ?? $user['weight']), 1);
 
         $stmt = $pdo->prepare("UPDATE users SET display_name = ?, height = ?, weight = ? WHERE id = ?");
         $stmt->execute([$name, $height, $weight, $user['id']]);

@@ -4,6 +4,8 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash VARCHAR(255) NOT NULL,
     display_name VARCHAR(100) NOT NULL,
     avatar_id INTEGER DEFAULT 1,
+    height NUMERIC(5,1),
+    weight NUMERIC(5,1),
     line_user_id VARCHAR(255) UNIQUE,
     line_bind_code VARCHAR(6),
     line_bind_code_expires_at TIMESTAMP,
