@@ -159,3 +159,69 @@ sequenceDiagram
         LB->>LINE: Reply "無效的代碼"
     end
 ```
+
+---
+
+## 3. 資料庫實體關係圖 (Database ER Diagram)
+
+```mermaid
+erDiagram
+    users ||--o{ workouts : "records"
+    users ||--o{ email_notifications : "receives"
+    users ||--o{ achievements : "unlocks"
+    users ||--o{ leaderboard_snapshots : "has_history"
+    users ||--|| user_totals : "has_cache"
+
+    users {
+        int id PK "Serial ID"
+        string email "Unique Email"
+        string password_hash "Hashed Password"
+        string display_name "User Nickname"
+        string line_user_id "LINE User ID"
+        string line_bind_code "Binding Code"
+        datetime line_bind_code_expires_at "Code Expiry"
+        int height "Height in cm"
+        int weight "Weight in kg"
+        int avatar_id "Avatar ID"
+        datetime created_at "Registration Time"
+    }
+
+    workouts {
+        int id PK "Serial ID"
+        int user_id FK "User Reference"
+        datetime date "Workout Date"
+        string type "Workout Type"
+        int minutes "Duration"
+        int calories "Burned Calories"
+        datetime created_at "Record Time"
+    }
+
+    user_totals {
+        int user_id PK, FK "User Reference"
+        bigint total_calories "Cached Total Calories"
+    }
+
+    leaderboard_snapshots {
+        int id PK "Serial ID"
+        date date "Snapshot Date"
+        int user_id FK "User Reference"
+        int rank "Rank on Date"
+        int total_minutes "Total Minutes on Date"
+        datetime created_at "Snapshot Time"
+    }
+
+    email_notifications {
+        int id PK "Serial ID"
+        int user_id FK "User Reference"
+        string type "Email Type"
+        datetime created_at "Creation Time"
+        datetime sent_at "Sent Time"
+    }
+
+    achievements {
+        int id PK "Serial ID"
+        int user_id FK "User Reference"
+        string type "Achievement Type"
+        datetime unlocked_at "Unlock Time"
+    }
+```
